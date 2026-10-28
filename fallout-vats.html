@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Fallout VATS Targeting</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+let t=0,selectedPart=2,ap=85,maxAp=100;
+const parts=[
+  {name:'HEAD',pct:47,x:0,y:-0.34,w:0.08,h:0.1},
+  {name:'TORSO',pct:72,x:0,y:-0.15,w:0.12,h:0.16},
+  {name:'L ARM',pct:65,x:-0.11,y:-0.14,w:0.06,h:0.18},
+  {name:'R ARM',pct:58,x:0.11,y:-0.14,w:0.06,h:0.18},
+  {name:'L LEG',pct:71,x:-0.05,y:0.12,w:0.06,h:0.22},
+  {name:'R LEG',pct:63,x:0.05,y:0.12,w:0.06,h:0.22},
+];
+let cycleTimer=0;
+
+function pipGreen(a){return `rgba(0,255,100,${a})`}
+
+function drawBody(cx,cy,scale){
+  X.strokeStyle=pipGreen(0.4);X.lineWidth=1.5;
+  X.beginPath();X.arc(cx,cy-scale*0.32,scale*0.06,0,Math.PI*2);X.stroke();
+  X.beginPath();X.moveTo(cx,cy-scale*0.26);X.lineTo(cx,cy-scale*0.04);X.stroke();
+  X.beginPath();X.moveTo(cx-scale*0.12,cy-scale*0.2);X.lineTo(cx,cy-scale*0.22);X.lineTo(cx+scale*0.12,cy-scale*0.2);X.stroke();
+  X.beginPath();X.moveTo(cx,cy-scale*0.04);X.lineTo(cx-scale*0.06,cy+scale*0.22);X.stroke();
+  X.beginPath();X.moveTo(cx,cy-scale*0.04);X.lineTo(cx+scale*0.06,cy+scale*0.22);X.stroke();
+}
+
+function drawPartHighlight(cx,cy,scale,idx){
+  const p=parts[idx];
+  const px=cx+p.x*scale,py=cy+p.y*scale;
+  const pw=p.w*scale,ph=p.h*scale;
+  const pulse=0.3+Math.sin(t*4)*0.15;
+  X.save();X.shadowColor=pipGreen(0.6);X.shadowBlur=12;
+  X.strokeStyle=pipGreen(0.7+pulse);X.lineWidth=2;
+  X.strokeRect(px-pw/2,py-ph/2,pw,ph);
+  X.fillStyle=pipGreen(0.05+pulse*0.05);X.fillRect(px-pw/2,py-ph/2,pw,ph);
+  X.restore();
+  const corner=6;
+  X.strokeStyle=pipGreen(0.9);X.lineWidth=2;
+  [[px-pw/2,py-ph/2,corner,0,0,corner],[px+pw/2,py-ph/2,-corner,0,0,corner],
+   [px-pw/2,py+ph/2,corner,0,0,-corner],[px+pw/2,py+ph/2,-corner,0,0,-corner]].forEach(([x,y,dx1,dy1,dx2,dy2])=>{
+    X.beginPath();X.moveTo(x+dx1,y);X.lineTo(x,y);X.lineTo(x,y+dy2);X.stroke();
+  });
+}
+
+function drawPartList(bx,by){
+  X.font='bold 13px monospace';
+  parts.forEach((p,i)=>{
+    const sel=i===selectedPart;
+    const y=by+i*28;
+    if(sel){X.fillStyle=pipGreen(0.15);X.fillRect(bx-5,y-12,200,22);
+      X.strokeStyle=pipGreen(0.4);X.strokeRect(bx-5,y-12,200,22)}
+    X.textAlign='left';X.fillStyle=sel?pipGreen(0.95):pipGreen(0.4);
+    X.fillText(p.name,bx,y);
+    X.textAlign='right';
+    const pct=p.pct+Math.sin(t*2+i)*2|0;
+    X.fillStyle=pct>50?pipGreen(sel?0.95:0.5):`rgba(255,80,40,${sel?0.9:0.5})`;
+    X.fillText(pct+'%',bx+190,y);
+  });
+}
+
+function drawAPBar(){
+  const bx=W/2-150,by=H-60,bw=300,bh=14;
+  X.fillStyle='rgba(0,20,5,0.6)';X.fillRect(bx-2,by-18,bw+4,bh+22);
+  X.font='9px monospace';X.textAlign='left';X.fillStyle=pipGreen(0.5);
+  X.fillText('ACTION POINTS',bx,by-6);
+  X.textAlign='right';X.fillText(`${ap}/${maxAp}`,bx+bw,by-6);
+  X.fillStyle=pipGreen(0.1);X.fillRect(bx,by,bw,bh);
+  const filled=bw*(ap/maxAp);
+  const g=X.createLinearGradient(bx,0,bx+filled,0);
+  g.addColorStop(0,pipGreen(0.5));g.addColorStop(1,pipGreen(0.7));
+  X.fillStyle=g;X.fillRect(bx,by,filled,bh);
+  for(let i=1;i<maxAp/10;i++){X.fillStyle='rgba(0,0,0,0.3)';X.fillRect(bx+bw*i/(maxAp/10)-0.5,by,1,bh)}
+  X.strokeStyle=pipGreen(0.3);X.strokeRect(bx,by,bw,bh);
+}
+
+function drawWeaponInfo(){
+  X.font='10px monospace';X.textAlign='left';X.fillStyle=pipGreen(0.4);
+  X.fillText('10MM PISTOL',30,H-80);
+  X.font='9px monospace';X.fillStyle=pipGreen(0.3);
+  X.fillText('DMG: 18  |  AP COST: 25  |  RNG: 40m',30,H-65);
+  X.fillText('AMMO: 12/48',30,H-50);
+}
+
+function drawCritMeter(){
+  const cx=W-80,cy=H-70,r=30;
+  const crit=0.35+Math.sin(t*0.7)*0.1;
+  X.strokeStyle=pipGreen(0.2);X.lineWidth=4;
+  X.beginPath();X.arc(cx,cy,r,-Math.PI*0.75,Math.PI*0.75);X.stroke();
+  X.strokeStyle=pipGreen(0.7);X.lineWidth=4;
+  X.beginPath();X.arc(cx,cy,r,-Math.PI*0.75,-Math.PI*0.75+Math.PI*1.5*crit);X.stroke();
+  X.font='bold 14px monospace';X.textAlign='center';X.textBaseline='middle';
+  X.fillStyle=pipGreen(0.8);X.fillText((crit*100|0)+'%',cx,cy);
+  X.font='7px monospace';X.fillStyle=pipGreen(0.4);X.fillText('CRIT',cx,cy+16);
+}
+
+function drawScanlines(){
+  for(let y=0;y<H;y+=2){X.fillStyle='rgba(0,0,0,0.08)';X.fillRect(0,y,W,1)}
+  X.fillStyle=`rgba(0,255,100,${0.01+Math.sin(t*0.3)*0.005})`;X.fillRect(0,0,W,H);
+}
+
+function drawVaultBoyCorner(){
+  X.save();X.globalAlpha=0.15;
+  X.font='60px serif';X.textAlign='right';X.fillStyle=pipGreen(1);
+  X.fillText('👍',W-20,70);X.restore();
+}
+
+function frame(){
+  requestAnimationFrame(frame);t+=0.016;
+  cycleTimer+=0.016;if(cycleTimer>2.5){cycleTimer=0;selectedPart=(selectedPart+1)%parts.length}
+  X.fillStyle='#030a03';X.fillRect(0,0,W,H);
+  const cx=W/2,cy=H/2-20,scale=Math.min(W,H)*0.7;
+  drawBody(cx,cy,scale);
+  drawPartHighlight(cx,cy,scale,selectedPart);
+  drawPartList(W/2+scale*0.22,cy-scale*0.25);
+  drawAPBar();drawWeaponInfo();drawCritMeter();drawScanlines();
+  X.font='bold 11px monospace';X.textAlign='center';
+  X.fillStyle=pipGreen(0.3);X.fillText('V.A.T.S. — VAULT-TEC ASSISTED TARGETING SYSTEM',W/2,30);
+}
+frame();
+</script>
+</body>
+</html>

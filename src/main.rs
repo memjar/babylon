@@ -1,0 +1,67 @@
+mod renderer;
+mod hud;
+
+use std::sync::Arc;
+use winit::application::ApplicationHandler;
+use winit::event::WindowEvent;
+use winit::event_loop::{ActiveEventLoop, EventLoop};
+use winit::window::{Window, WindowId, WindowAttributes};
+use renderer::Renderer;
+use hud::TacticalHud;
+
+struct App {
+    window: Option<Arc<Window>>,
+    renderer: Option<Renderer>,
+    hud: TacticalHud,
+}
+
+impl App {
+    fn new() -> Self {
+        Self {
+            window: None,
+            renderer: None,
+            hud: TacticalHud::new(),
+        }
+    }
+}
+
+impl ApplicationHandler for App {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.window.is_some() {
+            return;
+        }
+        let attrs = WindowAttributes::default()
+            .with_title("HOLODECK — Tactical HUD")
+            .with_inner_size(winit::dpi::LogicalSize::new(1280u32, 800u32));
+        let window = Arc::new(event_loop.create_window(attrs).expect("create window"));
+        let renderer = pollster::block_on(Renderer::new(window.clone()));
+        self.window = Some(window);
+        self.renderer = Some(renderer);
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
+        match event {
+            WindowEvent::CloseRequested => event_loop.exit(),
+            WindowEvent::Resized(size) => {
+                if let Some(r) = self.renderer.as_mut() {
+                    r.resize(size.width, size.height);
+                }
+            }
+            WindowEvent::RedrawRequested => {
+                if let (Some(r), Some(w)) = (self.renderer.as_mut(), self.window.as_ref()) {
+                    self.hud.tick();
+                    r.render(&self.hud);
+                    w.request_redraw();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn main() {
+    env_logger::init();
+    let event_loop = EventLoop::new().expect("event loop");
+    let mut app = App::new();
+    event_loop.run_app(&mut app).expect("run app");
+}
