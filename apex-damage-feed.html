@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Apex Legends Damage Feed</title>
+<style>*{margin:0;padding:0}body{background:#0a0a0c;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+let t=0;
+const dmgNums=[],knockMsgs=[],killMsgs=[];
+const legends=['Wraith','Octane','Lifeline','Pathfinder','Bangalore','Bloodhound','Gibraltar','Mirage'];
+const weapons=['R-301','Peacekeeper','Wingman','R-99','Flatline','Mastiff','Kraber','Havoc'];
+let totalDmg=0,kills=0;
+
+function spawnDmg(){
+  const hs=Math.random()<0.2;
+  const shield=Math.random()<0.6;
+  const val=hs?(90+Math.random()*60|0):(15+Math.random()*40|0);
+  totalDmg+=val;
+  dmgNums.push({x:W/2+(Math.random()-0.5)*120,y:H/2-30,val,hs,shield,life:1.2,vy:-2-Math.random()*2,vx:(Math.random()-0.5)*2});
+  if(Math.random()<0.08){
+    const v=legends[Math.random()*legends.length|0];
+    knockMsgs.push({text:`KNOCKED ${v}`,life:3});
+    if(Math.random()<0.5){kills++;killMsgs.push({text:`ELIMINATED ${v}`,life:4,weapon:weapons[Math.random()*weapons.length|0]})}
+  }
+}
+
+function drawCrosshair(){
+  const cx=W/2,cy=H/2;
+  X.strokeStyle='rgba(255,255,255,0.4)';X.lineWidth=1.5;
+  const g=6,l=10;
+  [[cx-g-l,cy,cx-g,cy],[cx+g,cy,cx+g+l,cy],[cx,cy-g-l,cx,cy-g],[cx,cy+g,cx,cy+g+l]].forEach(([x1,y1,x2,y2])=>{
+    X.beginPath();X.moveTo(x1,y1);X.lineTo(x2,y2);X.stroke();
+  });
+}
+
+function drawDmgNums(){
+  dmgNums.forEach((d,i)=>{
+    d.life-=0.014;d.y+=d.vy;d.x+=d.vx;d.vy+=0.02;
+    if(d.life<=0){dmgNums.splice(i,1);return}
+    X.save();X.globalCompositeOperation='lighter';
+    const a=Math.min(1,d.life*1.5);
+    X.font=d.hs?'bold 28px sans-serif':'bold 20px sans-serif';
+    X.textAlign='center';
+    if(d.shield){X.fillStyle=`rgba(80,140,255,${a})`;X.shadowColor='rgba(80,140,255,0.6)'}
+    else if(d.hs){X.fillStyle=`rgba(255,220,50,${a})`;X.shadowColor='rgba(255,220,50,0.6)'}
+    else{X.fillStyle=`rgba(255,60,60,${a})`;X.shadowColor='rgba(255,60,60,0.5)'}
+    X.shadowBlur=8;
+    X.fillText(d.val,d.x,d.y);
+    X.restore();
+  });
+}
+
+function drawKnockFeed(){
+  let y=H*0.35;
+  knockMsgs.forEach((m,i)=>{
+    m.life-=0.016;if(m.life<=0){knockMsgs.splice(i,1);return}
+    const a=Math.min(1,m.life);
+    X.save();X.globalCompositeOperation='lighter';
+    X.font='bold 16px sans-serif';X.textAlign='center';
+    X.shadowColor='rgba(255,80,80,0.5)';X.shadowBlur=10;
+    X.fillStyle=`rgba(255,80,80,${a})`;
+    X.fillText(m.text,W/2,y);
+    X.restore();
+    y-=24;
+  });
+}
+
+function drawKillFeed(){
+  X.textAlign='right';let y=50;
+  killMsgs.forEach((m,i)=>{
+    m.life-=0.012;if(m.life<=0){killMsgs.splice(i,1);return}
+    const a=Math.min(1,m.life);
+    X.fillStyle=`rgba(0,0,0,${a*0.5})`;X.fillRect(W-330,y-12,310,20);
+    X.font='11px monospace';X.fillStyle=`rgba(255,60,60,${a})`;
+    X.fillText(m.text,W-80,y+2);
+    X.fillStyle=`rgba(200,200,200,${a*0.5})`;
+    X.fillText(`[${m.weapon}]`,W-20,y+2);
+    y+=24;
+  });
+}
+
+function drawEvoShield(){
+  const bx=W-200,by=H-60,bw=170,bh=8;
+  const evo=Math.min(totalDmg/750,1);
+  let col;
+  if(evo<0.25)col=[200,200,200];
+  else if(evo<0.5)col=[80,140,255];
+  else if(evo<0.75)col=[180,60,255];
+  else col=[255,50,50];
+  X.fillStyle='rgba(20,20,25,0.6)';X.fillRect(bx-5,by-18,bw+10,32);
+  X.font='9px monospace';X.textAlign='left';
+  X.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},0.6)`;
+  X.fillText(`EVO SHIELD — ${totalDmg|0} DMG`,bx,by-6);
+  X.fillStyle='rgba(30,30,35,0.5)';X.fillRect(bx,by,bw,bh);
+  X.save();X.shadowColor=`rgba(${col[0]},${col[1]},${col[2]},0.5)`;X.shadowBlur=6;
+  X.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},0.7)`;
+  X.fillRect(bx,by,bw*evo,bh);X.restore();
+}
+
+function drawSquadInfo(){
+  X.font='9px monospace';X.textAlign='left';
+X.fillStyle='rgba(200,200,200,0.3)';
+  X.fillText(`KILLS: ${kills}`,20,H-50);
+  X.fillText(`DAMAGE: ${totalDmg|0}`,20,H-36);
+  X.fillText('SQUAD: 3/3 ALIVE',20,H-22);
+}
+
+function drawMinimap(){
+  const mx=30,my=30,ms=100;
+  X.fillStyle='rgba(10,10,15,0.7)';X.fillRect(mx,my,ms,ms);
+  X.strokeStyle='rgba(200,200,200,0.15)';X.strokeRect(mx,my,ms,ms);
+  for(let i=1;i<4;i++){
+    X.strokeStyle='rgba(200,200,200,0.05)';
+    X.beginPath();X.moveTo(mx+ms*i/4,my);X.lineTo(mx+ms*i/4,my+ms);X.stroke();
+    X.beginPath();X.moveTo(mx,my+ms*i/4);X.lineTo(mx+ms,my+ms*i/4);X.stroke();
+  }
+  X.fillStyle='rgba(255,255,255,0.8)';
+  X.beginPath();X.moveTo(mx+ms/2,my+ms/2-4);X.lineTo(mx+ms/2+3,my+ms/2+3);X.lineTo(mx+ms/2-3,my+ms/2+3);X.closePath();X.fill();
+  X.fillStyle='rgba(80,180,255,0.5)';
+  X.beginPath();X.arc(mx+ms*0.3,my+ms*0.4,2,0,Math.PI*2);X.fill();
+  X.beginPath();X.arc(mx+ms*0.7,my+ms*0.6,2,0,Math.PI*2);X.fill();
+}
+
+function drawScanlines(){for(let y=0;y<H;y+=3){X.fillStyle='rgba(0,0,0,0.04)';X.fillRect(0,y,W,1)}}
+
+function frame(){
+  requestAnimationFrame(frame);t+=0.016;
+  if(Math.random()<0.06)spawnDmg();
+  X.fillStyle='#0a0a0c';X.fillRect(0,0,W,H);
+  drawMinimap();drawCrosshair();drawDmgNums();drawKnockFeed();drawKillFeed();drawEvoShield();drawSquadInfo();drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>

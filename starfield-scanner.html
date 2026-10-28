@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Starfield Scanner</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+let t=0,scanTarget=0,scanProg=0;
+
+const pois=[
+  {x:0.35,y:0.4,name:'ABANDONED OUTPOST',type:'structure',data:['CLASS: OUTPOST','FACTION: NONE','THREAT: LOW','RESOURCES: IRON, WATER']},
+  {x:0.65,y:0.35,name:'MINERAL DEPOSIT',type:'resource',data:['TYPE: RARE EARTH','YIELD: HIGH','DEPTH: 12M','ELEMENT: NEODYMIUM']},
+  {x:0.5,y:0.6,name:'UNKNOWN SIGNAL',type:'anomaly',data:['ORIGIN: SUBTERRANEAN','FREQUENCY: 147.3 GHz','PATTERN: REPEATING','STATUS: ACTIVE']},
+  {x:0.25,y:0.65,name:'FAUNA DETECTED',type:'life',data:['BIOME: TEMPERATE','SPECIES: UNKNOWN','BEHAVIOR: PASSIVE','MASS: ~120 KG']},
+];
+
+function drawScannerFrame(){
+  X.strokeStyle='rgba(180,200,220,0.1)';X.lineWidth=1;
+  const m=50,r=15;
+  X.beginPath();
+  X.moveTo(m+r,m);X.lineTo(W-m-r,m);X.quadraticCurveTo(W-m,m,W-m,m+r);
+  X.lineTo(W-m,H-m-r);X.quadraticCurveTo(W-m,H-m,W-m-r,H-m);
+  X.lineTo(m+r,H-m);X.quadraticCurveTo(m,H-m,m,H-m-r);
+  X.lineTo(m,m+r);X.quadraticCurveTo(m,m,m+r,m);
+  X.stroke();
+}
+
+function drawPOI(poi,active){
+  const px=poi.x*W,py=poi.y*H;
+  let col;
+  if(poi.type==='structure')col='180,200,220';
+  else if(poi.type==='resource')col='100,200,255';
+  else if(poi.type==='anomaly')col='255,180,60';
+  else col='80,220,120';
+
+  const a=active?0.9:0.35+Math.sin(t*2+poi.x*10)*0.1;
+  const s=active?30:22;
+  const g=s*0.35;
+
+  X.strokeStyle=`rgba(${col},${a})`;X.lineWidth=active?1.5:1;
+  [[px-s,py-s,1,1],[px+s,py-s,-1,1],[px+s,py+s,-1,-1],[px-s,py+s,1,-1]].forEach(([x,y,dx,dy])=>{
+    X.beginPath();X.moveTo(x,y+dy*g);X.lineTo(x,y);X.lineTo(x+dx*g,y);X.stroke();
+  });
+
+  if(active){
+    X.save();X.shadowColor=`rgba(${col},0.4)`;X.shadowBlur=12;
+    X.strokeStyle=`rgba(${col},0.2)`;X.lineWidth=0.5;
+    for(let i=0;i<4;i++){
+      const ra=t*1.5+i*Math.PI/2;
+      X.beginPath();X.arc(px,py,s+8,ra,ra+0.5);X.stroke();
+    }
+    X.restore();
+  }
+
+  X.fillStyle=`rgba(${col},${a*0.8})`;
+  X.beginPath();X.arc(px,py,2,0,Math.PI*2);X.fill();
+
+  X.font='9px monospace';X.textAlign='center';
+  X.fillStyle=`rgba(${col},${a*0.6})`;
+  X.fillText(poi.name,px,py-s-6);
+
+  X.font='8px monospace';
+  const dist=(50+poi.x*100+Math.sin(t+poi.y)*5).toFixed(1);
+  X.fillText(`${dist}m`,px,py+s+12);
+}
+
+function drawScanPanel(){
+  const poi=pois[scanTarget];
+  let col;
+  if(poi.type==='structure')col='180,200,220';
+  else if(poi.type==='resource')col='100,200,255';
+  else if(poi.type==='anomaly')col='255,180,60';
+  else col='80,220,120';
+
+  const px=W-280,py=80,pw=230,ph=130;
+  X.fillStyle=`rgba(5,8,12,${Math.min(scanProg*2,0.85)})`;
+  X.fillRect(px,py,pw,ph);
+  X.strokeStyle=`rgba(${col},${Math.min(scanProg,1)*0.4})`;
+  X.lineWidth=0.5;X.strokeRect(px,py,pw,ph);
+
+  X.font='bold 10px monospace';X.textAlign='left';
+  X.fillStyle=`rgba(${col},${Math.min(scanProg,1)*0.8})`;
+  X.fillText(poi.name,px+10,py+18);
+
+  X.fillStyle=`rgba(${col},0.2)`;X.fillRect(px+10,py+24,pw-20,2);
+  X.fillStyle=`rgba(${col},0.7)`;X.fillRect(px+10,py+24,(pw-20)*Math.min(scanProg,1),2);
+
+  X.font='9px monospace';
+  const lines=Math.min(poi.data.length,Math.floor(scanProg*poi.data.length+0.5));
+  for(let i=0;i<lines;i++){
+    X.fillStyle=`rgba(${col},${Math.min(1,(scanProg-i/poi.data.length)*poi.data.length)*0.6})`;
+    X.fillText(poi.data[i],px+10,py+44+i*16);
+  }
+}
+
+function drawPlanetInfo(){
+  X.font='10px monospace';X.textAlign='left';
+  X.fillStyle='rgba(180,200,220,0.3)';
+  X.fillText('PLANET: JEMISON',70,75);
+  X.fillText('SYSTEM: ALPHA CENTAURI',70,89);
+  X.fillText('ATMO: O2/N2 BREATHABLE',70,103);
+  X.fillText('TEMP: 22°C',70,117);
+  X.fillText('GRAV: 0.94G',70,131);
+}
+
+function drawScanlines(){for(let y=0;y<H;y+=3){X.fillStyle='rgba(0,0,0,0.04)';X.fillRect(0,y,W,1)}}
+
+function simulate(){
+  const cycle=t%7;
+  scanTarget=Math.floor(t/7)%pois.length;
+  scanProg=Math.min(1,cycle/4);
+}
+
+function frame(){
+  requestAnimationFrame(frame);t+=0.016;simulate();
+  X.fillStyle='#060810';X.fillRect(0,0,W,H);
+  drawScannerFrame();
+  pois.forEach((p,i)=>drawPOI(p,i===scanTarget));
+  drawScanPanel();
+  drawPlanetInfo();
+  drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>

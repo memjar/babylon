@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Elden Ring Compass & Grace</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+let t=0,bearing=0;
+
+const graces=[
+  {name:'Church of Elleh',a:45,dist:120},
+  {name:'Gatefront',a:160,dist:85},
+  {name:'Stormhill Shack',a:280,dist:200},
+];
+
+const pois=[
+  {name:'Erdtree',a:30,type:'landmark'},
+  {name:'Enemy Camp',a:190,type:'danger'},
+  {name:'Cave Entrance',a:310,type:'dungeon'},
+];
+
+function drawCompass(){
+  const cx=W/2,cy=80,cw=W*0.4;
+  X.fillStyle='rgba(0,0,0,0.3)';X.fillRect(cx-cw/2,cy-20,cw,40);
+
+  const dirs=['N','NE','E','SE','S','SW','W','NW'];
+  X.font='11px serif';X.textAlign='center';
+
+  for(let d=-180;d<=540;d+=5){
+    const off=((d-bearing+180+360)%360-180)*(cw/130);
+    const px=cx+off;
+    if(px<cx-cw/2+5||px>cx+cw/2-5)continue;
+
+    if(d%45===0){
+      const idx=((d%360+360)%360)/45;
+      const label=dirs[idx%8];
+      X.fillStyle=label==='N'?'rgba(220,180,80,0.9)':'rgba(200,190,170,0.5)';
+      X.font=label==='N'?'bold 13px serif':'11px serif';
+      X.fillText(label,px,cy+4);
+    }else if(d%15===0){
+      X.fillStyle='rgba(200,190,170,0.15)';X.fillRect(px,cy-8,1,5);
+    }
+  }
+
+  graces.forEach(g=>{
+    const diff=((g.a-bearing+180+360)%360-180);
+    const px=cx+diff*(cw/130);
+    if(px<cx-cw/2||px>cx+cw/2)return;
+    X.save();X.shadowColor='rgba(220,180,60,0.6)';X.shadowBlur=8;
+    X.fillStyle='rgba(220,180,60,0.8)';
+    const s=5;
+    X.beginPath();X.moveTo(px,cy-12);X.lineTo(px+s,cy-12-s);X.lineTo(px,cy-12-s*2);X.lineTo(px-s,cy-12-s);X.closePath();X.fill();
+    X.restore();
+  });
+
+  pois.forEach(p=>{
+    const diff=((p.a-bearing+180+360)%360-180);
+    const px=cx+diff*(cw/130);
+    if(px<cx-cw/2||px>cx+cw/2)return;
+    if(p.type==='danger'){X.fillStyle='rgba(200,50,50,0.5)'}
+    else if(p.type==='dungeon'){X.fillStyle='rgba(100,150,200,0.5)'}
+    else{X.fillStyle='rgba(200,190,170,0.4)'}
+    X.beginPath();X.arc(px,cy+14,3,0,Math.PI*2);X.fill();
+  });
+
+  X.strokeStyle='rgba(220,180,60,0.6)';X.lineWidth=1;
+  X.beginPath();X.moveTo(cx,cy-20);X.lineTo(cx,cy-16);X.stroke();
+}
+
+function drawGraceBeam(){
+  const target=graces[0];
+  const diff=((target.a-bearing+180+360)%360-180);
+  const angle=diff*Math.PI/180;
+  const cx=W/2,cy=H/2;
+  const len=80;
+
+  X.save();X.globalCompositeOperation='lighter';
+  for(let i=0;i<8;i++){
+    const a=0.08*(1-i/8);
+    const ox=(Math.random()-0.5)*2;
+    X.strokeStyle=`rgba(220,180,60,${a})`;
+    X.lineWidth=3-i*0.3;
+    X.beginPath();
+    X.moveTo(cx,cy);
+    const curve=Math.sin(t*3+i)*10;
+    X.quadraticCurveTo(cx+Math.cos(angle)*len/2+curve,cy+Math.sin(angle)*len/2,cx+Math.cos(angle)*len+ox,cy+Math.sin(angle)*len);
+    X.stroke();
+  }
+
+  const particles=5;
+  for(let i=0;i<particles;i++){
+    const prog=(t*0.5+i/particles)%1;
+    const px=cx+Math.cos(angle)*len*prog;
+    const py=cy+Math.sin(angle)*len*prog;
+    X.fillStyle=`rgba(220,180,60,${(1-prog)*0.3})`;
+    X.beginPath();X.arc(px+(Math.random()-0.5)*4,py+(Math.random()-0.5)*4,1+Math.random(),0,Math.PI*2);X.fill();
+  }
+  X.restore();
+}
+
+function drawRuneCount(){
+  const runes=12847+Math.floor(t*100)%5000;
+  X.font='16px serif';X.textAlign='right';
+  X.fillStyle='rgba(220,180,60,0.6)';
+  X.fillText(runes.toLocaleString(),W-30,40);
+  X.font='10px serif';X.fillStyle='rgba(220,180,60,0.3)';
+  X.fillText('RUNES',W-30,54);
+}
+
+function drawHealthFP(){
+  const hpW=250,bh=10;
+  X.save();X.shadowColor='rgba(180,40,40,0.4)';X.shadowBlur=6;
+  X.fillStyle='rgba(180,40,40,0.7)';
+  const hp=0.65+Math.sin(t*0.5)*0.15;
+  X.fillRect(30,30,hpW*hp,bh);X.restore();
+  X.strokeStyle='rgba(180,40,40,0.3)';X.strokeRect(30,30,hpW,bh);
+
+  X.save();X.shadowColor='rgba(40,80,180,0.4)';X.shadowBlur=6;
+  X.fillStyle='rgba(40,80,180,0.7)';
+  const fp=0.8+Math.sin(t*0.3)*0.1;
+  X.fillRect(30,46,hpW*0.7*fp,bh-2);X.restore();
+  X.strokeStyle='rgba(40,80,180,0.3)';X.strokeRect(30,46,hpW*0.7,bh-2);
+
+  X.save();X.shadowColor='rgba(40,160,60,0.4)';X.shadowBlur=6;
+  X.fillStyle='rgba(40,160,60,0.7)';
+  X.fillRect(30,60,hpW*0.5,bh-2);X.restore();
+  X.strokeStyle='rgba(40,160,60,0.3)';X.strokeRect(30,60,hpW*0.5,bh-2);
+}
+
+function drawSiteOfGrace(){
+  X.font='10px serif';X.textAlign='center';
+  X.fillStyle='rgba(220,180,60,0.3)';
+  X.fillText('SITE OF GRACE NEARBY',W/2,H-30);
+  const pulse=0.3+Math.sin(t*2)*0.15;
+  X.fillStyle=`rgba(220,180,60,${pulse})`;
+  X.beginPath();X.arc(W/2,H-45,3,0,Math.PI*2);X.fill();
+}
+
+function drawVignette(){
+  const g=X.createRadialGradient(W/2,H/2,W*0.3,W/2,H/2,W*0.7);
+  g.addColorStop(0,'rgba(0,0,0,0)');g.addColorStop(1,'rgba(0,0,0,0.5)');
+  X.fillStyle=g;X.fillRect(0,0,W,H);
+}
+
+function frame(){
+  requestAnimationFrame(frame);t+=0.016;bearing=(bearing+0.2)%360;
+  X.fillStyle='#0a0908';X.fillRect(0,0,W,H);
+  drawGraceBeam();drawCompass();drawRuneCount();drawHealthFP();drawSiteOfGrace();drawVignette();
+}
+frame();
+</script>
+</body>
+</html>
