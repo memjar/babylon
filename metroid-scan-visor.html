@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Metroid Prime Scan Visor</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+
+let t=0,scanPhase=0,scanProgress=0,scanTarget=null;
+const targets=[
+  {x:0.3,y:0.4,name:'SPACE PIRATE',type:'hostile',data:['CLASS: ZEBESIAN','THREAT: HIGH','ARMOR: MEDIUM','WEAPON: GALVANIC']},
+  {x:0.7,y:0.35,name:'MORPH BALL SLOT',type:'scan',data:['TYPE: INTERFACE','STATUS: ACTIVE','REQUIRES: MORPH BALL','ENERGY: STABLE']},
+  {x:0.5,y:0.65,name:'CHOZO ARTIFACT',type:'lore',data:['ORIGIN: CHOZO','AGE: 3000 CYCLES','POWER: UNKNOWN','CONDITION: INTACT']},
+];
+
+function drawVisorFrame(){
+  X.strokeStyle='rgba(255,140,0,0.15)';X.lineWidth=2;
+  const m=40;
+  const r=20;
+
+  X.beginPath();
+  X.moveTo(m+r,m);X.lineTo(W-m-r,m);X.quadraticCurveTo(W-m,m,W-m,m+r);
+  X.lineTo(W-m,H-m-r);X.quadraticCurveTo(W-m,H-m,W-m-r,H-m);
+  X.lineTo(m+r,H-m);X.quadraticCurveTo(m,H-m,m,H-m-r);
+  X.lineTo(m,m+r);X.quadraticCurveTo(m,m,m+r,m);
+  X.stroke();
+
+  X.strokeStyle='rgba(255,140,0,0.08)';X.lineWidth=4;
+  X.stroke();
+
+  const vg=X.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.7);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(0.6,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,0.8)');
+  X.fillStyle=vg;X.fillRect(0,0,W,H);
+
+  X.fillStyle='rgba(255,100,0,0.02)';X.fillRect(0,0,W,H);
+}
+
+function drawReticle(x,y,size,color,alpha){
+  X.save();
+  X.strokeStyle=`rgba(${color},${alpha})`;X.lineWidth=1.5;
+  const s=size;
+  const g=s*0.3;
+  X.beginPath();X.moveTo(x-s,y-s+g);X.lineTo(x-s,y-s);X.lineTo(x-s+g,y-s);X.stroke();
+  X.beginPath();X.moveTo(x+s-g,y-s);X.lineTo(x+s,y-s);X.lineTo(x+s,y-s+g);X.stroke();
+  X.beginPath();X.moveTo(x+s,y+s-g);X.lineTo(x+s,y+s);X.lineTo(x+s-g,y+s);X.stroke();
+  X.beginPath();X.moveTo(x-s+g,y+s);X.lineTo(x-s,y+s);X.lineTo(x-s,y+s-g);X.stroke();
+  X.restore();
+}
+
+function drawTargets(){
+  targets.forEach((tgt,i)=>{
+    const px=tgt.x*W,py=tgt.y*H;
+    const isActive=scanTarget===i;
+    const hover=Math.sin(t*2+i*2)*3;
+
+    let col;
+    if(tgt.type==='hostile')col='255,60,30';
+    else if(tgt.type==='scan')col='60,200,255';
+    else col='100,255,100';
+
+    const baseAlpha=isActive?0.9:0.4+Math.sin(t*3+i)*0.1;
+    const size=isActive?35+Math.sin(t*4)*3:25;
+
+    drawReticle(px,py+hover,size,col,baseAlpha);
+
+    if(isActive){
+      X.strokeStyle=`rgba(${col},0.3)`;X.lineWidth=0.5;
+      for(let r=0;r<3;r++){
+        const rs=size+10+r*8+Math.sin(t*5+r)*2;
+        X.beginPath();X.arc(px,py+hover,rs,t+r,t+r+1);X.stroke();
+      }
+
+      const wirePts=8;
+      X.strokeStyle=`rgba(${col},0.2)`;
+      X.lineWidth=0.5;
+      for(let w=0;w<wirePts;w++){
+        const a=(w/wirePts)*Math.PI*2+t;
+        const r1=size-5,r2=size+5+Math.sin(t*3+w)*5;
+        X.beginPath();
+        X.moveTo(px+Math.cos(a)*r1,py+hover+Math.sin(a)*r1);
+        X.lineTo(px+Math.cos(a)*r2,py+hover+Math.sin(a)*r2);
+        X.stroke();
+      }
+    }
+
+    X.font='9px monospace';X.textAlign='center';
+    X.fillStyle=`rgba(${col},${baseAlpha*0.7})`;
+    X.fillText(tgt.name,px,py+hover-size-8);
+  });
+}
+
+function drawScanData(){
+  if(scanTarget===null||scanProgress<=0)return;
+  const tgt=targets[scanTarget];
+  let col;
+  if(tgt.type==='hostile')col='255,60,30';
+  else if(tgt.type==='scan')col='60,200,255';
+  else col='100,255,100';
+
+  const bx=W-280,by=80,bw=240,bh=140;
+  X.fillStyle=`rgba(0,0,0,${Math.min(scanProgress,1)*0.7})`;
+  X.fillRect(bx,by,bw,bh);
+  X.strokeStyle=`rgba(${col},${Math.min(scanProgress,1)*0.5})`;
+  X.lineWidth=1;X.strokeRect(bx,by,bw,bh);
+
+  X.font='bold 11px monospace';X.textAlign='left';
+  X.fillStyle=`rgba(${col},${Math.min(scanProgress,1)*0.9})`;
+  X.fillText(`SCAN: ${tgt.name}`,bx+10,by+20);
+
+  X.fillStyle=`rgba(${col},0.3)`;
+  X.fillRect(bx+10,by+28,bw-20,3);
+  X.fillStyle=`rgba(${col},0.8)`;
+  X.fillRect(bx+10,by+28,(bw-20)*Math.min(scanProgress,1),3);
+
+  X.font='10px monospace';
+  const lines=Math.min(tgt.data.length,Math.floor(scanProgress*tgt.data.length));
+  for(let i=0;i<lines;i++){
+    const la=Math.min(1,(scanProgress-i/tgt.data.length)*tgt.data.length);
+    X.fillStyle=`rgba(${col},${la*0.7})`;
+    X.fillText(tgt.data[i],bx+10,by+50+i*18);
+  }
+}
+
+function drawScanBar(){
+  X.font='10px monospace';X.textAlign='center';
+  X.fillStyle='rgba(255,140,0,0.5)';
+  const mode=scanPhase>0?'SCANNING...':'SCAN VISOR ACTIVE';
+  X.fillText(mode,W/2,H-50);
+
+  if(scanPhase>0){
+    const bw=200,bh=4;
+    X.fillStyle='rgba(255,140,0,0.2)';
+    X.fillRect(W/2-bw/2,H-42,bw,bh);
+    X.fillStyle='rgba(255,140,0,0.7)';
+    X.fillRect(W/2-bw/2,H-42,bw*Math.min(scanProgress,1),bh);
+  }
+}
+
+function drawHelmHUD(){
+  X.font='9px monospace';X.textAlign='left';
+  X.fillStyle='rgba(255,140,0,0.3)';
+  X.fillText('VISOR: SCAN',60,60);
+  X.fillText(`TARGETS: ${targets.length}`,60,74);
+  X.fillText(`THREAT LEVEL: ${targets.some(t=>t.type==='hostile')?'ELEVATED':'LOW'}`,60,88);
+
+  X.textAlign='right';
+  X.fillText('ENERGY: 14/14',W-60,60);
+  X.fillText('MISSILES: 250',W-60,74);
+}
+
+function drawScanlines(){
+  for(let y=0;y<H;y+=2){
+    X.fillStyle=`rgba(0,0,0,${0.08+Math.sin(y*0.5+t*2)*0.02})`;
+    X.fillRect(0,y,W,1);
+  }
+}
+
+function simulate(){
+  const cycle=t%12;
+  if(cycle<1){scanTarget=null;scanPhase=0;scanProgress=0}
+  else if(cycle<1.2){scanTarget=0;scanPhase=1;scanProgress=0}
+  else if(cycle<3.5){scanProgress=(cycle-1.2)/2.3}
+  else if(cycle<5){scanTarget=null;scanPhase=0;scanProgress=0}
+  else if(cycle<5.2){scanTarget=1;scanPhase=1;scanProgress=0}
+  else if(cycle<7.5){scanProgress=(cycle-5.2)/2.3}
+  else if(cycle<9){scanTarget=null;scanPhase=0;scanProgress=0}
+  else if(cycle<9.2){scanTarget=2;scanPhase=1;scanProgress=0}
+  else if(cycle<11.5){scanProgress=(cycle-9.2)/2.3}
+  else{scanTarget=null;scanPhase=0;scanProgress=0}
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;
+  simulate();
+  X.fillStyle='#050302';X.fillRect(0,0,W,H);
+  drawVisorFrame();
+  drawTargets();
+  drawScanData();
+  drawScanBar();
+  drawHelmHUD();
+  drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>

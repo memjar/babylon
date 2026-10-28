@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Halo Motion Tracker</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H,cx,cy,R;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight;cx=W/2;cy=H/2;R=Math.min(W,H)*0.4}
+resize();addEventListener('resize',resize);
+
+const contacts=[
+  {a:0.3,r:0.6,type:'hostile',da:0.002,dr:0},
+  {a:1.2,r:0.4,type:'hostile',da:-0.003,dr:0.001},
+  {a:2.5,r:0.8,type:'friendly',da:0.001,dr:-0.0005},
+  {a:3.8,r:0.3,type:'friendly',da:0.004,dr:0},
+  {a:4.5,r:0.55,type:'neutral',da:-0.002,dr:0.0008},
+  {a:5.2,r:0.7,type:'hostile',da:0.0015,dr:-0.0003},
+  {a:0.8,r:0.2,type:'friendly',da:-0.005,dr:0},
+  {a:2.1,r:0.9,type:'hostile',da:0.001,dr:-0.001},
+];
+
+let sweep=0,t=0;
+
+function drawBg(){
+  const g=X.createRadialGradient(cx,cy,0,cx,cy,R*1.2);
+  g.addColorStop(0,'rgba(10,30,20,0.95)');
+  g.addColorStop(0.8,'rgba(5,15,10,0.98)');
+  g.addColorStop(1,'rgba(0,0,0,1)');
+  X.fillStyle=g;
+  X.fillRect(0,0,W,H);
+}
+
+function drawRings(){
+  X.strokeStyle='rgba(40,180,100,0.15)';
+  X.lineWidth=1;
+  for(let i=1;i<=4;i++){
+    X.beginPath();X.arc(cx,cy,R*(i/4),0,Math.PI*2);X.stroke();
+  }
+  X.strokeStyle='rgba(40,180,100,0.3)';
+  X.lineWidth=1.5;
+  X.beginPath();X.arc(cx,cy,R,0,Math.PI*2);X.stroke();
+}
+
+function drawGrid(){
+  X.strokeStyle='rgba(40,180,100,0.08)';
+  X.lineWidth=0.5;
+  for(let i=0;i<8;i++){
+    const a=i*Math.PI/4;
+    X.beginPath();X.moveTo(cx,cy);
+    X.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);X.stroke();
+  }
+}
+
+function drawCardinals(){
+  X.font='bold 12px monospace';X.textAlign='center';X.textBaseline='middle';
+  X.fillStyle='rgba(40,180,100,0.5)';
+  const off=R+18;
+  X.fillText('N',cx,cy-off);
+  X.fillText('S',cx,cy+off);
+  X.fillText('E',cx+off,cy);
+  X.fillText('W',cx-off,cy);
+}
+
+function drawSweep(){
+  const sa=sweep;
+  const g=X.createConicalGradient?null:null;
+  X.save();
+  X.globalCompositeOperation='lighter';
+  for(let i=0;i<30;i++){
+    const a=sa-i*0.015;
+    const alpha=0.15*(1-i/30);
+    X.strokeStyle=`rgba(40,220,120,${alpha})`;
+    X.lineWidth=2;
+    X.beginPath();X.moveTo(cx,cy);
+    X.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);X.stroke();
+  }
+  X.strokeStyle='rgba(80,255,150,0.6)';
+  X.lineWidth=2;
+  X.beginPath();X.moveTo(cx,cy);
+  X.lineTo(cx+Math.cos(sa)*R,cy+Math.sin(sa)*R);X.stroke();
+  X.restore();
+}
+
+function drawCenter(){
+  X.fillStyle='rgba(80,255,150,0.8)';
+  X.beginPath();X.arc(cx,cy,3,0,Math.PI*2);X.fill();
+  X.strokeStyle='rgba(80,255,150,0.3)';
+  X.lineWidth=1;
+  X.beginPath();X.arc(cx,cy,6,0,Math.PI*2);X.stroke();
+}
+
+function drawContacts(){
+  X.save();
+  X.globalCompositeOperation='lighter';
+  contacts.forEach(c=>{
+    c.a+=c.da;
+    c.r=Math.max(0.05,Math.min(0.95,c.r+c.dr));
+    if(c.r<=0.05||c.r>=0.95)c.dr*=-1;
+
+    const px=cx+Math.cos(c.a)*c.r*R;
+    const py=cy+Math.sin(c.a)*c.r*R;
+    const dist=Math.sqrt((px-cx)**2+(py-cy)**2);
+    if(dist>R)return;
+
+    let col;
+    if(c.type==='hostile')col=[255,60,60];
+    else if(c.type==='friendly')col=[255,220,40];
+    else col=[150,150,150];
+
+    const angleDiff=((c.a-sweep)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);
+    const freshness=angleDiff<0.5?1-angleDiff/0.5:0;
+    const pulse=0.6+Math.sin(t*3+c.a*5)*0.2+freshness*0.4;
+
+    X.shadowColor=`rgba(${col[0]},${col[1]},${col[2]},0.8)`;
+    X.shadowBlur=8+freshness*12;
+    X.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},${pulse})`;
+    X.beginPath();X.arc(px,py,3+freshness*2,0,Math.PI*2);X.fill();
+
+    if(freshness>0.2){
+      X.shadowBlur=15;
+      X.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},${freshness*0.3})`;
+      X.beginPath();X.arc(px,py,6+freshness*4,0,Math.PI*2);X.fill();
+    }
+  });
+  X.shadowBlur=0;
+  X.restore();
+}
+
+function drawScanlines(){
+  X.save();
+  X.globalCompositeOperation='multiply';
+  for(let y=0;y<H;y+=3){
+    X.fillStyle='rgba(0,0,0,0.15)';
+    X.fillRect(0,y,W,1);
+  }
+  X.restore();
+}
+
+function drawVignette(){
+  const g=X.createRadialGradient(cx,cy,R*0.7,cx,cy,R*1.3);
+  g.addColorStop(0,'rgba(0,0,0,0)');
+  g.addColorStop(1,'rgba(0,0,0,0.9)');
+  X.fillStyle=g;
+  X.fillRect(0,0,W,H);
+}
+
+function drawHUD(){
+  X.font='10px monospace';X.fillStyle='rgba(40,180,100,0.4)';
+  X.textAlign='left';
+  X.fillText('MOTION TRACKER v2.7',20,30);
+  X.fillText(`CONTACTS: ${contacts.length}`,20,44);
+  X.textAlign='right';
+  X.fillText('RANGE: 25M',W-20,30);
+  X.fillText(`SWEEP: ${(sweep*180/Math.PI%360).toFixed(0)}°`,W-20,44);
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;
+  sweep+=0.02;
+  X.clearRect(0,0,W,H);
+  drawBg();
+  X.save();
+  X.beginPath();X.arc(cx,cy,R,0,Math.PI*2);X.clip();
+  drawGrid();
+  drawRings();
+  drawSweep();
+  drawContacts();
+  X.restore();
+  drawRings();
+  drawCardinals();
+  drawCenter();
+  drawScanlines();
+  drawVignette();
+  drawHUD();
+}
+frame();
+</script>
+</body>
+</html>

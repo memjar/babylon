@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>HOLODECK — Game HUD Collection</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050508;color:#ddd;font-family:'Courier New',monospace;min-height:100vh;padding:40px}
+h1{color:#00b4ff;font-size:28px;letter-spacing:4px;text-transform:uppercase;margin-bottom:8px}
+.sub{color:rgba(0,180,255,0.4);font-size:11px;letter-spacing:2px;margin-bottom:40px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:20px}
+a{text-decoration:none}
+.card{background:rgba(0,20,40,0.6);border:1px solid rgba(0,180,255,0.15);border-radius:4px;padding:20px;transition:all 0.3s}
+.card:hover{border-color:rgba(0,180,255,0.5);background:rgba(0,30,60,0.6);transform:translateY(-2px);box-shadow:0 4px 20px rgba(0,180,255,0.1)}
+.card h2{color:#00ccff;font-size:14px;letter-spacing:1px;margin-bottom:6px}
+.card .source{color:rgba(0,180,255,0.4);font-size:10px;letter-spacing:1px;margin-bottom:8px;text-transform:uppercase}
+.card p{color:rgba(200,220,240,0.5);font-size:11px;line-height:1.5}
+.tag{display:inline-block;padding:2px 6px;font-size:9px;border-radius:2px;margin-right:4px;margin-top:8px}
+.tag.webgl{background:rgba(0,180,255,0.15);color:#00b4ff}
+.tag.canvas{background:rgba(255,140,0,0.15);color:#ff8c00}
+.tag.three{background:rgba(100,255,100,0.15);color:#66ff66}
+</style>
+</head>
+<body>
+<h1>Holodeck</h1>
+<div class="sub">GAME HUD RECREATION LIBRARY — WEBGL/CANVAS COMPONENTS</div>
+<div class="grid">
+  <a href="holotable.html"><div class="card">
+    <h2>Holographic Tactical Table</h2>
+    <div class="source">Star Wars Battlefront II (2017)</div>
+    <p>3D wireframe terrain, radar sweep, bloom, particle noise, contact markers with height pillars. WiFi radar foundation.</p>
+    <span class="tag webgl">WebGL</span><span class="tag three">Three.js</span>
+  </div></a>
+  <a href="halo-motion-tracker.html"><div class="card">
+    <h2>Motion Tracker</h2>
+    <div class="source">Halo CE / Halo 2</div>
+    <p>Circular radar with sweep line, dot contacts (hostile/friendly/neutral), range rings, cardinal markers, bloom on contacts.</p>
+    <span class="tag canvas">Canvas 2D</span>
+  </div></a>
+  <a href="halo-shield-bar.html"><div class="card">
+    <h2>Shield & Health Bar</h2>
+    <div class="source">Halo CE / Halo 2</div>
+    <p>Segmented energy bars with shield recharge animation, electric crackling, damage flash, and auto-cycling demo.</p>
+    <span class="tag canvas">Canvas 2D</span>
+  </div></a>
+  <a href="cod4-compass.html"><div class="card">
+    <h2>Compass & Bearing Strip</h2>
+    <div class="source">Call of Duty 4: Modern Warfare</div>
+    <p>Rotating compass with enemy pips, cardinal directions, crosshair, ammo counter, kill feed with random events.</p>
+    <span class="tag canvas">Canvas 2D</span>
+  </div></a>
+  <a href="cod4-hitmarker.html"><div class="card">
+    <h2>Hitmarker & Kill Feed</h2>
+    <div class="source">Call of Duty 4: Modern Warfare</div>
+    <p>Expanding X hitmarker, headshot variant, floating damage numbers, scrolling kill feed, killstreak announcements.</p>
+    <span class="tag canvas">Canvas 2D</span>
+  </div></a>
+  <a href="mass-effect-galaxy-map.html"><div class="card">
+    <h2>Galaxy Map</h2>
+    <div class="source">Mass Effect</div>
+    <p>3D star field with selectable systems, nebula cloud, trade routes, height pillars, orbital rings, grid overlay.</p>
+    <span class="tag webgl">WebGL</span><span class="tag three">Three.js</span>
+  </div></a>
+  <a href="metroid-scan-visor.html"><div class="card">
+    <h2>Scan Visor</h2>
+    <div class="source">Metroid Prime</div>
+    <p>Wireframe lock-on brackets, scan progress bar, data overlay panel, visor frame, helmet HUD, auto-cycling targets.</p>
+    <span class="tag canvas">Canvas 2D</span>
+  </div></a>
+  <a href="titanfall-tactical-map.html"><div class="card">
+    <h2>Tactical Map</h2>
+    <div class="source">Titanfall 2</div>
+    <p>Top-down holographic grid, wireframe buildings, pilot/titan/enemy markers, pulsing grid, sweep cone.</p>
+    <span class="tag webgl">WebGL</span><span class="tag three">Three.js</span>
+  </div></a>
+  <a href="dead-space-health.html"><div class="card">
+    <h2>Spine Health Bar</h2>
+    <div class="source">Dead Space</div>
+    <p>Diegetic segmented spine glow, stasis module, RIG outline, color-shifting health segments, damage edge flash.</p>
+    <span class="tag canvas">Canvas 2D</span>
+  </div></a>
+</div>
+</body>
+</html>
