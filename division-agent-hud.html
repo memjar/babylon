@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>The Division Agent HUD</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+let t=0;
+
+function drawSHDWatch(cx,cy,r){
+  X.save();X.shadowColor='rgba(255,140,0,0.4)';X.shadowBlur=15;
+  X.strokeStyle='rgba(255,140,0,0.6)';X.lineWidth=2;
+  X.beginPath();X.arc(cx,cy,r,0,Math.PI*2);X.stroke();
+  X.strokeStyle='rgba(255,140,0,0.2)';X.lineWidth=1;
+  X.beginPath();X.arc(cx,cy,r*0.85,0,Math.PI*2);X.stroke();
+  X.restore();
+
+  const level=30;
+  const xpProg=0.65+Math.sin(t*0.3)*0.1;
+  X.strokeStyle='rgba(255,140,0,0.7)';X.lineWidth=3;
+  X.beginPath();X.arc(cx,cy,r,-Math.PI/2,-Math.PI/2+Math.PI*2*xpProg);X.stroke();
+
+  X.font='bold 24px monospace';X.textAlign='center';X.textBaseline='middle';
+  X.fillStyle='rgba(255,140,0,0.9)';X.fillText(level,cx,cy-4);
+  X.font='8px monospace';X.fillStyle='rgba(255,140,0,0.4)';X.fillText('SHD LEVEL',cx,cy+14);
+
+  for(let i=0;i<8;i++){
+    const a=-Math.PI/2+i*Math.PI/4;
+    X.fillStyle='rgba(255,140,0,0.2)';
+    X.fillRect(cx+Math.cos(a)*(r-6)-1,cy+Math.sin(a)*(r-6)-1,2,2);
+  }
+}
+
+function drawAgentHP(){
+  const bx=30,by=H-80,bw=250;
+  X.fillStyle='rgba(10,10,10,0.5)';X.fillRect(bx-5,by-20,bw+10,55);
+
+  const hp=0.72+Math.sin(t*0.4)*0.1;
+  X.fillStyle='rgba(40,40,40,0.4)';X.fillRect(bx,by,bw,10);
+  const hpG=X.createLinearGradient(bx,0,bx+bw*hp,0);
+  hpG.addColorStop(0,'rgba(200,60,30,0.8)');hpG.addColorStop(1,'rgba(255,100,40,0.6)');
+  X.fillStyle=hpG;X.fillRect(bx,by,bw*hp,10);
+
+  const armor=0.85;
+  X.fillStyle='rgba(40,40,40,0.4)';X.fillRect(bx,by-12,bw,8);
+  X.fillStyle='rgba(80,140,255,0.7)';X.fillRect(bx,by-12,bw*armor,8);
+  for(let i=1;i<4;i++){X.fillStyle='rgba(0,0,0,0.5)';X.fillRect(bx+bw*i/4-1,by-12,2,8)}
+
+  X.font='8px monospace';X.textAlign='left';
+  X.fillStyle='rgba(80,140,255,0.5)';X.fillText('ARMOR',bx,by-16);
+  X.fillStyle='rgba(200,60,30,0.5)';X.fillText('HEALTH',bx,by+22);
+}
+
+function drawSkills(){
+  const skills=[{name:'TURRET',cd:0,icon:'T'},{name:'SEEKER',cd:Math.max(0,1-t%8/8),icon:'S'}];
+  skills.forEach((s,i)=>{
+    const sx=W-100+i*50,sy=H-80,sr=18;
+    X.strokeStyle=s.cd>0?'rgba(200,200,200,0.2)':'rgba(255,140,0,0.5)';
+    X.lineWidth=2;X.beginPath();X.arc(sx,sy,sr,0,Math.PI*2);X.stroke();
+    if(s.cd>0){
+      X.strokeStyle='rgba(255,140,0,0.6)';X.lineWidth=2;
+      X.beginPath();X.arc(sx,sy,sr,-Math.PI/2,-Math.PI/2+Math.PI*2*(1-s.cd));X.stroke();
+    }
+    X.font='bold 12px monospace';X.textAlign='center';X.textBaseline='middle';
+    X.fillStyle=s.cd>0?'rgba(200,200,200,0.3)':'rgba(255,140,0,0.7)';
+    X.fillText(s.icon,sx,sy);
+    X.font='7px monospace';X.fillStyle='rgba(200,200,200,0.3)';
+    X.fillText(s.name,sx,sy+sr+10);
+  });
+}
+
+function drawAmmo(){
+  const ax=W-200,ay=H-40;
+  const mag=18-(Math.floor(t*3)%30);
+  X.font='bold 28px monospace';X.textAlign='right';
+  X.fillStyle='rgba(255,255,255,0.7)';X.fillText(Math.max(0,mag),ax,ay);
+  X.font='14px monospace';X.fillStyle='rgba(255,255,255,0.3)';
+  X.fillText('/ 420',ax+50,ay);
+  X.font='9px monospace';X.fillStyle='rgba(200,200,200,0.3)';
+  X.fillText('VECTOR SBR',ax+50,ay-22);
+}
+
+function drawWaypoints(){
+  const wps=[{x:W*0.6,y:H*0.3,name:'EXTRACTION',dist:'340m',color:'80,255,80'},
+    {x:W*0.3,y:H*0.25,name:'MISSION',dist:'520m',color:'255,140,0'}];
+  wps.forEach(w=>{
+    const bob=Math.sin(t*2)*3;
+    X.save();X.shadowColor=`rgba(${w.color},0.4)`;X.shadowBlur=6;
+    X.fillStyle=`rgba(${w.color},0.7)`;
+    X.beginPath();X.moveTo(w.x,w.y+bob-8);X.lineTo(w.x+6,w.y+bob);X.lineTo(w.x,w.y+bob+4);X.lineTo(w.x-6,w.y+bob);X.closePath();X.fill();
+    X.restore();
+    X.font='8px monospace';X.textAlign='center';
+    X.fillStyle=`rgba(${w.color},0.5)`;
+    X.fillText(w.name,w.x,w.y+bob-14);X.fillText(w.dist,w.x,w.y+bob+14);
+  });
+}
+
+function drawDZWarning(){
+  if(Math.sin(t*0.5)>0.7){
+    X.save();X.globalCompositeOperation='lighter';
+    X.font='bold 12px monospace';X.textAlign='center';
+    X.shadowColor='rgba(255,60,0,0.5)';X.shadowBlur=10;
+    X.fillStyle=`rgba(255,60,0,${0.5+Math.sin(t*4)*0.3})`;
+    X.fillText('DARK ZONE BOUNDARY',W/2,H*0.12);X.restore();
+  }
+}
+
+function drawScanlines(){for(let y=0;y<H;y+=2){X.fillStyle='rgba(0,0,0,0.05)';X.fillRect(0,y,W,1)}}
+
+function frame(){
+  requestAnimationFrame(frame);t+=0.016;
+  X.fillStyle='#080808';X.fillRect(0,0,W,H);
+  drawSHDWatch(W/2,H/2,50);drawAgentHP();drawSkills();drawAmmo();drawWaypoints();drawDZWarning();drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>

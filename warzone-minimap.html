@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Warzone Tactical Map</title>
+<style>*{margin:0;padding:0}body{background:#0a0a0c;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+let t=0;
+
+const squads=[
+  {x:0.3,y:0.4,color:[80,180,255],name:'SQUAD 1',members:3},
+  {x:0.6,y:0.25,color:[255,80,80],name:'HOSTILE',members:4},
+  {x:0.75,y:0.7,color:[255,80,80],name:'HOSTILE',members:2},
+  {x:0.2,y:0.7,color:[255,200,60],name:'BOUNTY',members:1},
+];
+const contracts=[{x:0.45,y:0.55,type:'bounty'},{x:0.8,y:0.3,type:'recon'},{x:0.15,y:0.5,type:'supply'}];
+const zone={cx:0.5,cy:0.45,r:0.35,nextR:0.2,nextCx:0.55,nextCy:0.4};
+let gasPhase=0;
+
+function drawMap(mx,my,ms){
+  X.fillStyle='rgba(15,20,15,0.85)';X.fillRect(mx,my,ms,ms);
+  X.strokeStyle='rgba(200,200,200,0.1)';X.lineWidth=0.5;
+  for(let i=0;i<=10;i++){
+    X.beginPath();X.moveTo(mx+ms*i/10,my);X.lineTo(mx+ms*i/10,my+ms);X.stroke();
+    X.beginPath();X.moveTo(mx,my+ms*i/10);X.lineTo(mx+ms,my+ms*i/10);X.stroke();
+  }
+  X.font='8px monospace';X.fillStyle='rgba(200,200,200,0.15)';X.textAlign='center';
+  'ABCDEFGHIJ'.split('').forEach((l,i)=>X.fillText(l,mx+ms*(i+0.5)/10,my-4));
+  for(let i=0;i<10;i++)X.fillText(i+1+'',mx-8,my+ms*(i+0.5)/10+3);
+
+  const zcx=mx+zone.cx*ms,zcy=my+zone.cy*ms,zr=zone.r*ms;
+  X.save();
+  X.beginPath();X.rect(mx,my,ms,ms);X.clip();
+  X.fillStyle='rgba(180,120,0,0.04)';X.fillRect(mx,my,ms,ms);
+  X.globalCompositeOperation='destination-out';
+  X.beginPath();X.arc(zcx,zcy,zr,0,Math.PI*2);X.fill();
+  X.globalCompositeOperation='source-over';
+  X.strokeStyle='rgba(255,255,255,0.4)';X.lineWidth=2;
+  X.beginPath();X.arc(zcx,zcy,zr,0,Math.PI*2);X.stroke();
+  const nzr=zone.nextR*ms;
+  X.setLineDash([4,4]);X.strokeStyle='rgba(255,255,255,0.2)';X.lineWidth=1;
+  X.beginPath();X.arc(mx+zone.nextCx*ms,my+zone.nextCy*ms,nzr,0,Math.PI*2);X.stroke();
+  X.setLineDash([]);
+  X.restore();
+
+  contracts.forEach(c=>{
+    const px=mx+c.x*ms,py=my+c.y*ms;
+    let col;
+    if(c.type==='bounty')col='255,200,60';
+    else if(c.type==='recon')col='80,200,255';
+    else col='80,255,80';
+    X.save();X.shadowColor=`rgba(${col},0.5)`;X.shadowBlur=6;
+    X.fillStyle=`rgba(${col},${0.5+Math.sin(t*3)*0.2})`;
+    X.beginPath();X.arc(px,py,4,0,Math.PI*2);X.fill();X.restore();
+    X.font='7px monospace';X.textAlign='center';
+    X.fillStyle=`rgba(${col},0.4)`;X.fillText(c.type.toUpperCase(),px,py+10);
+  });
+
+  squads.forEach(s=>{
+    const px=mx+s.x*ms+Math.sin(t+s.x*10)*3;
+    const py=my+s.y*ms+Math.cos(t+s.y*10)*3;
+    const [r,g,b]=s.color;
+    X.save();X.shadowColor=`rgba(${r},${g},${b},0.6)`;X.shadowBlur=8;
+    X.fillStyle=`rgba(${r},${g},${b},0.8)`;
+    if(s.name==='SQUAD 1'){
+      X.beginPath();X.moveTo(px,py-5);X.lineTo(px+4,py+3);X.lineTo(px-4,py+3);X.closePath();X.fill();
+    }else{
+      X.beginPath();X.arc(px,py,3,0,Math.PI*2);X.fill();
+    }
+    X.restore();
+    X.font='7px monospace';X.textAlign='center';
+    X.fillStyle=`rgba(${r},${g},${b},0.4)`;
+    X.fillText(`${s.name} (${s.members})`,px,py-8);
+  });
+
+  X.strokeStyle='rgba(200,200,200,0.2)';X.lineWidth=1;X.strokeRect(mx,my,ms,ms);
+}
+
+function drawLoadout(){
+  const lx=W-220,ly=H-100;
+  X.fillStyle='rgba(10,10,15,0.7)';X.fillRect(lx,ly,200,80);
+  X.font='10px monospace';X.textAlign='left';
+  X.fillStyle='rgba(200,200,200,0.5)';X.fillText('PRIMARY: M4A1',lx+10,ly+18);
+  X.fillText('SECONDARY: HDR',lx+10,ly+34);
+  X.fillStyle='rgba(255,200,60,0.4)';X.fillText('CASH: $8,400',lx+10,ly+54);
+  X.fillStyle='rgba(80,180,255,0.4)';X.fillText('PLATES: 3/3',lx+10,ly+70);
+}
+
+function drawKillstreak(){
+  const kx=W/2,ky=H*0.2;
+  if(Math.sin(t*0.3)>0.8){
+    X.save();X.globalCompositeOperation='lighter';
+    X.font='bold 14px monospace';X.textAlign='center';
+    X.shadowColor='rgba(255,200,0,0.6)';X.shadowBlur=12;
+    X.fillStyle='rgba(255,200,0,0.8)';
+    X.fillText('UAV ACTIVE',kx,ky);X.restore();
+  }
+}
+
+function drawPingSystem(){
+  const pulse=(t*2)%3;
+  if(pulse<1.5){
+    const px=W*0.4,py=H*0.5;
+    X.save();X.globalCompositeOperation='lighter';
+    X.strokeStyle=`rgba(255,200,0,${(1-pulse/1.5)*0.4})`;
+    X.lineWidth=2;X.beginPath();X.arc(px,py,10+pulse*30,0,Math.PI*2);X.stroke();
+    X.fillStyle=`rgba(255,200,0,${(1-pulse/1.5)*0.6})`;
+    X.font='9px monospace';X.textAlign='center';
+    X.fillText('ENEMY HERE',px,py-20-pulse*10);
+    X.restore();
+  }
+}
+
+function drawScanlines(){for(let y=0;y<H;y+=3){X.fillStyle='rgba(0,0,0,0.04)';X.fillRect(0,y,W,1)}}
+
+function frame(){
+  requestAnimationFrame(frame);t+=0.016;
+  X.fillStyle='#0a0a0c';X.fillRect(0,0,W,H);
+  const ms=Math.min(W,H)*0.7;
+  drawMap((W-ms)/2,(H-ms)/2,ms);
+  drawLoadout();drawKillstreak();drawPingSystem();drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>
