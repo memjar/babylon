@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Alien Isolation Motion Tracker</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+
+let t=0,sweep=0;
+const contacts=[
+  {a:0.8,r:0.7,speed:0.003,type:'xeno'},
+  {a:2.1,r:0.4,speed:-0.001,type:'human'},
+  {a:4.5,r:0.6,speed:0.002,type:'human'},
+];
+
+function drawDevice(cx,cy,R){
+  X.save();
+
+  const dg=X.createRadialGradient(cx,cy,0,cx,cy,R*1.4);
+  dg.addColorStop(0,'rgba(15,25,10,0.95)');
+  dg.addColorStop(0.7,'rgba(10,15,5,0.98)');
+  dg.addColorStop(1,'rgba(0,0,0,1)');
+  X.fillStyle=dg;X.fillRect(cx-R*1.4,cy-R*1.4,R*2.8,R*2.8);
+
+  X.strokeStyle='rgba(80,200,60,0.12)';X.lineWidth=0.5;
+  for(let i=1;i<=5;i++){
+    X.beginPath();X.arc(cx,cy,R*(i/5),0,Math.PI*2);X.stroke();
+  }
+
+  X.strokeStyle='rgba(80,200,60,0.06)';
+  for(let i=0;i<12;i++){
+    const a=i*Math.PI/6;
+    X.beginPath();X.moveTo(cx,cy);
+    X.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);X.stroke();
+  }
+
+  X.beginPath();X.arc(cx,cy,R,-Math.PI/3,Math.PI/3);
+  X.strokeStyle='rgba(80,200,60,0.3)';X.lineWidth=2;X.stroke();
+
+  X.strokeStyle='rgba(80,200,60,0.25)';X.lineWidth=1.5;
+  X.beginPath();X.arc(cx,cy,R,0,Math.PI*2);X.stroke();
+
+  X.restore();
+}
+
+function drawSweep(cx,cy,R){
+  X.save();
+  X.globalCompositeOperation='lighter';
+  for(let i=0;i<25;i++){
+    const a=sweep-i*0.012;
+    const alpha=0.2*(1-i/25);
+    X.strokeStyle=`rgba(80,220,60,${alpha})`;X.lineWidth=2;
+    X.beginPath();X.moveTo(cx,cy);
+    X.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);X.stroke();
+  }
+  X.strokeStyle='rgba(120,255,80,0.7)';X.lineWidth=2;
+  X.beginPath();X.moveTo(cx,cy);
+  X.lineTo(cx+Math.cos(sweep)*R,cy+Math.sin(sweep)*R);X.stroke();
+  X.restore();
+}
+
+function drawContacts(cx,cy,R){
+  X.save();X.globalCompositeOperation='lighter';
+  contacts.forEach(c=>{
+    c.a+=c.speed;
+    const px=cx+Math.cos(c.a)*c.r*R;
+    const py=cy+Math.sin(c.a)*c.r*R;
+
+    const angleDiff=((c.a-sweep)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);
+    const fresh=angleDiff<0.4?1-angleDiff/0.4:0;
+
+    if(c.type==='xeno'){
+      const throb=0.5+Math.sin(t*8)*0.3+fresh*0.5;
+      X.shadowColor='rgba(255,60,30,0.8)';X.shadowBlur=15;
+      X.fillStyle=`rgba(255,80,40,${throb})`;
+      X.beginPath();X.arc(px,py,5+fresh*3,0,Math.PI*2);X.fill();
+      if(fresh>0.1){
+        X.strokeStyle=`rgba(255,80,40,${fresh*0.4})`;X.lineWidth=1;
+        X.beginPath();X.arc(px,py,10+fresh*8,0,Math.PI*2);X.stroke();
+      }
+    }else{
+      const vis=0.4+fresh*0.5;
+      X.shadowColor='rgba(80,200,60,0.5)';X.shadowBlur=8;
+      X.fillStyle=`rgba(80,220,60,${vis})`;
+      X.beginPath();X.arc(px,py,3+fresh*2,0,Math.PI*2);X.fill();
+    }
+  });
+  X.shadowBlur=0;X.restore();
+}
+
+function drawCenter(cx,cy){
+  X.fillStyle='rgba(80,200,60,0.7)';
+  X.beginPath();X.arc(cx,cy,2,0,Math.PI*2);X.fill();
+}
+
+function drawNoise(cx,cy,R){
+  X.save();X.globalCompositeOperation='lighter';
+  for(let i=0;i<15;i++){
+    const a=Math.random()*Math.PI*2;
+    const r=Math.random()*R;
+    const px=cx+Math.cos(a)*r,py=cy+Math.sin(a)*r;
+    X.fillStyle=`rgba(80,200,60,${0.02+Math.random()*0.04})`;
+    X.fillRect(px,py,1+Math.random()*2,1);
+  }
+  X.restore();
+}
+
+function drawBeepIndicator(cx,cy,R){
+  const xeno=contacts.find(c=>c.type==='xeno');
+  if(!xeno)return;
+  const dist=xeno.r;
+  const beepRate=1+(1-dist)*8;
+  const beep=Math.sin(t*beepRate*Math.PI)>0.8?1:0;
+
+  X.fillStyle=`rgba(255,80,40,${beep*0.6})`;
+  X.beginPath();X.arc(cx,cy-R-20,4,0,Math.PI*2);X.fill();
+
+  X.font='9px monospace';X.textAlign='center';
+  X.fillStyle=`rgba(80,200,60,0.4)`;
+  X.fillText(`${(dist*30).toFixed(1)}m`,cx,cy+R+25);
+}
+
+function drawScanlines(){
+  for(let y=0;y<H;y+=2){
+    X.fillStyle=`rgba(0,0,0,${0.12+Math.sin(y*0.3+t)*0.03})`;
+    X.fillRect(0,y,W,1);
+  }
+}
+
+function drawCRT(){
+  const flicker=0.96+Math.sin(t*17)*0.02+Math.sin(t*31)*0.02;
+  X.save();
+  X.globalCompositeOperation='multiply';
+  X.fillStyle=`rgba(255,255,255,${flicker})`;
+  X.fillRect(0,0,W,H);
+  X.restore();
+
+  const vg=X.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.max(W,H)*0.6);
+  vg.addColorStop(0,'rgba(0,0,0,0)');
+  vg.addColorStop(1,'rgba(0,0,0,0.6)');
+  X.fillStyle=vg;X.fillRect(0,0,W,H);
+}
+
+function drawHUD(){
+  X.font='9px monospace';X.fillStyle='rgba(80,200,60,0.3)';
+  X.textAlign='left';X.fillText('MOTION TRACKER',20,25);
+  X.fillText('SEVASTOPOL STATION',20,38);
+  X.textAlign='right';
+  X.fillText(`CONTACTS: ${contacts.length}`,W-20,25);
+  const xeno=contacts.find(c=>c.type==='xeno');
+  if(xeno)X.fillText('WARNING: HOSTILE DETECTED',W-20,38);
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;sweep+=0.025;
+  const cx=W/2,cy=H/2,R=Math.min(W,H)*0.3;
+  X.fillStyle='#020502';X.fillRect(0,0,W,H);
+  drawDevice(cx,cy,R);
+  drawSweep(cx,cy,R);
+  drawContacts(cx,cy,R);
+  drawCenter(cx,cy);
+  drawNoise(cx,cy,R);
+  drawBeepIndicator(cx,cy,R);
+  drawScanlines();
+  drawCRT();
+  drawHUD();
+}
+frame();
+</script>
+</body>
+</html>

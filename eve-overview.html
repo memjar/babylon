@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>EVE Online Overview & Tactical</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+
+let t=0;
+
+const ships=[
+  {name:'Raven Navy Issue',type:'BS',dist:42.3,vel:156,status:'hostile',angle:0.5,orbit:0.001},
+  {name:'Drake',type:'BC',dist:28.7,vel:220,status:'hostile',angle:1.8,orbit:-0.002},
+  {name:'Caracal',type:'CR',dist:15.1,vel:380,status:'hostile',angle:3.2,orbit:0.003},
+  {name:'Osprey',type:'CR',dist:35.8,vel:190,status:'neutral',angle:4.1,orbit:0.001},
+  {name:'Merlin',type:'FG',dist:8.4,vel:1200,status:'hostile',angle:5.5,orbit:-0.005},
+  {name:'Cormorant',type:'DD',dist:22.0,vel:450,status:'fleet',angle:0.3,orbit:0.002},
+  {name:'Moa',type:'CR',dist:19.5,vel:310,status:'fleet',angle:2.0,orbit:-0.001},
+  {name:'Blackbird',type:'CR',dist:55.0,vel:280,status:'fleet',angle:3.8,orbit:0.001},
+];
+
+function drawOverview(x,y,w,h){
+  X.fillStyle='rgba(5,8,15,0.9)';X.fillRect(x,y,w,h);
+  X.strokeStyle='rgba(80,120,160,0.3)';X.lineWidth=0.5;X.strokeRect(x,y,w,h);
+
+  X.fillStyle='rgba(20,30,50,0.8)';X.fillRect(x,y,w,20);
+  X.font='9px monospace';X.textAlign='left';
+  X.fillStyle='rgba(180,200,220,0.6)';
+  const cols=[['NAME',10],['TYPE',150],['DIST',200],['VEL',250],['STATUS',300]];
+  cols.forEach(([label,ox])=>X.fillText(label,x+ox,y+14));
+
+  ships.forEach((s,i)=>{
+    const ry=y+24+i*22;
+    const sel=i===Math.floor(t*0.5)%ships.length;
+    if(sel){X.fillStyle='rgba(40,60,100,0.4)';X.fillRect(x+1,ry-2,w-2,20)}
+
+    let col;
+    if(s.status==='hostile')col='rgba(255,60,60,0.8)';
+    else if(s.status==='fleet')col='rgba(80,180,255,0.8)';
+    else col='rgba(200,200,200,0.5)';
+
+    X.fillStyle=col;X.font='10px monospace';X.textAlign='left';
+    X.fillText(s.name,x+10,ry+12);
+    X.fillStyle='rgba(150,170,200,0.5)';
+    X.fillText(s.type,x+150,ry+12);
+    X.fillText(`${s.dist.toFixed(1)}km`,x+200,ry+12);
+    X.fillText(`${s.vel}m/s`,x+250,ry+12);
+    X.fillStyle=col;
+    X.fillText(s.status.toUpperCase(),x+300,ry+12);
+  });
+}
+
+function drawTactical(cx,cy,R){
+  X.strokeStyle='rgba(60,80,120,0.15)';X.lineWidth=0.5;
+  for(let i=1;i<=4;i++){X.beginPath();X.arc(cx,cy,R*(i/4),0,Math.PI*2);X.stroke()}
+
+  X.strokeStyle='rgba(60,80,120,0.08)';
+  for(let i=0;i<8;i++){
+    const a=i*Math.PI/4;
+    X.beginPath();X.moveTo(cx,cy);X.lineTo(cx+Math.cos(a)*R,cy+Math.sin(a)*R);X.stroke();
+  }
+
+  X.fillStyle='rgba(80,180,255,0.9)';
+  X.beginPath();X.arc(cx,cy,3,0,Math.PI*2);X.fill();
+  X.strokeStyle='rgba(80,180,255,0.3)';X.lineWidth=1;
+  X.beginPath();X.arc(cx,cy,6,0,Math.PI*2);X.stroke();
+
+  ships.forEach(s=>{
+    s.angle+=s.orbit;
+    const r=(s.dist/60)*R;
+    const px=cx+Math.cos(s.angle)*r;
+    const py=cy+Math.sin(s.angle)*r;
+
+    let col;
+    if(s.status==='hostile')col=[255,60,60];
+    else if(s.status==='fleet')col=[80,180,255];
+    else col=[200,200,200];
+
+    const sz=s.type==='BS'?4:s.type==='BC'?3.5:s.type==='DD'?2.5:s.type==='FG'?2:3;
+    X.save();
+    X.shadowColor=`rgba(${col[0]},${col[1]},${col[2]},0.5)`;X.shadowBlur=6;
+    X.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},0.8)`;
+    if(s.type==='BS'||s.type==='BC'){
+      X.beginPath();X.moveTo(px,py-sz);X.lineTo(px+sz,py+sz);X.lineTo(px-sz,py+sz);X.closePath();X.fill();
+    }else{
+      X.beginPath();X.arc(px,py,sz,0,Math.PI*2);X.fill();
+    }
+    X.restore();
+
+    X.font='7px monospace';X.textAlign='center';
+    X.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},0.4)`;
+    X.fillText(s.name.split(' ')[0],px,py+sz+9);
+  });
+
+  X.font='8px monospace';X.textAlign='center';
+  X.fillStyle='rgba(80,120,160,0.3)';
+  X.fillText('15km',cx,cy-R*(15/60)-4);
+  X.fillText('30km',cx,cy-R*(30/60)-4);
+  X.fillText('45km',cx,cy-R*(45/60)-4);
+  X.fillText('60km',cx,cy-R-4);
+}
+
+function drawShipStatus(x,y){
+  X.fillStyle='rgba(5,8,15,0.8)';X.fillRect(x,y,180,100);
+  X.strokeStyle='rgba(80,120,160,0.2)';X.strokeRect(x,y,180,100);
+
+  X.font='9px monospace';X.textAlign='left';
+  X.fillStyle='rgba(80,180,255,0.6)';
+  X.fillText('YOUR SHIP',x+8,y+16);
+
+  const bars=[['SHIELD',0.85,'80,180,255'],['ARMOR',1.0,'200,180,60'],['HULL',1.0,'200,60,60']];
+  bars.forEach(([name,val,col],i)=>{
+    const by=y+24+i*22;
+    X.fillStyle=`rgba(${col},0.3)`;X.fillText(name,x+8,by+10);
+    X.fillStyle='rgba(30,30,40,0.5)';X.fillRect(x+65,by+2,100,10);
+    X.fillStyle=`rgba(${col},0.6)`;X.fillRect(x+65,by+2,100*val,10);
+    X.textAlign='right';X.fillStyle=`rgba(${col},0.5)`;
+    X.fillText(`${(val*100)|0}%`,x+172,by+10);X.textAlign='left';
+  });
+}
+
+function drawCapacitor(x,y){
+  const charges=6,active=4+Math.floor(Math.sin(t*0.3)*2);
+  X.font='8px monospace';X.fillStyle='rgba(200,200,60,0.4)';
+  X.textAlign='center';X.fillText('CAP',x,y-8);
+  for(let i=0;i<charges;i++){
+    const a=-Math.PI/2+i*(Math.PI*2/charges);
+    const r=18;
+    const px=x+Math.cos(a)*r,py=y+Math.sin(a)*r;
+    X.fillStyle=i<active?'rgba(200,200,60,0.6)':'rgba(40,40,40,0.4)';
+    X.beginPath();X.arc(px,py,4,0,Math.PI*2);X.fill();
+  }
+}
+
+function drawScanlines(){
+  for(let y=0;y<H;y+=2){X.fillStyle='rgba(0,0,0,0.06)';X.fillRect(0,y,W,1)}
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;
+  X.fillStyle='#030510';X.fillRect(0,0,W,H);
+  drawOverview(15,15,380,210);
+  drawTactical(W*0.65,H*0.4,Math.min(W*0.25,H*0.35));
+  drawShipStatus(15,H-130);
+  drawCapacitor(W*0.65,H-60);
+  drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Destiny Ghost Scan</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+
+let t=0,scanActive=false,scanProg=0,scanCycle=0;
+
+function drawGhost(cx,cy,size){
+  const s=size,pulse=1+Math.sin(t*3)*0.03;
+  X.save();
+  X.translate(cx,cy);X.scale(pulse,pulse);
+
+  X.fillStyle='rgba(200,220,240,0.9)';
+  X.beginPath();
+  X.moveTo(0,-s);X.lineTo(s*0.7,-s*0.3);X.lineTo(s*0.7,s*0.3);
+  X.lineTo(0,s);X.lineTo(-s*0.7,s*0.3);X.lineTo(-s*0.7,-s*0.3);X.closePath();
+  X.fill();
+
+  X.fillStyle='rgba(80,160,255,0.95)';
+  X.beginPath();X.arc(0,0,s*0.25,0,Math.PI*2);X.fill();
+
+  X.save();
+  X.shadowColor='rgba(80,160,255,0.8)';X.shadowBlur=20;
+  X.fillStyle='rgba(120,200,255,0.6)';
+  X.beginPath();X.arc(0,0,s*0.15,0,Math.PI*2);X.fill();
+  X.restore();
+
+  X.strokeStyle='rgba(100,150,200,0.3)';X.lineWidth=0.5;
+  for(let i=0;i<3;i++){
+    const a=t*2+i*Math.PI*2/3;
+    const r1=s*0.8,r2=s*1.1+Math.sin(t*4+i)*5;
+    X.beginPath();
+    X.moveTo(Math.cos(a)*r1,Math.sin(a)*r1);
+    X.lineTo(Math.cos(a)*r2,Math.sin(a)*r2);
+    X.stroke();
+  }
+
+  X.restore();
+}
+
+function drawScanBeam(cx,cy){
+  if(!scanActive)return;
+  const beamW=200+Math.sin(t*5)*20;
+  const beamH=300;
+  const bx=cx+80,by=cy;
+
+  X.save();
+  X.globalCompositeOperation='lighter';
+  const g=X.createLinearGradient(cx,cy,bx+beamW/2,by);
+  g.addColorStop(0,'rgba(80,160,255,0.4)');
+  g.addColorStop(0.5,'rgba(80,160,255,0.1)');
+  g.addColorStop(1,'rgba(80,160,255,0)');
+  X.fillStyle=g;
+  X.beginPath();
+  X.moveTo(cx+20,cy);
+  X.lineTo(bx+beamW/2,by-beamH/2);
+  X.lineTo(bx+beamW/2,by+beamH/2);
+  X.closePath();
+  X.fill();
+
+  for(let i=0;i<20;i++){
+    const px=cx+40+Math.random()*beamW;
+    const py=cy-beamH/3+Math.random()*beamH*0.66;
+    const sz=1+Math.random()*2;
+    X.fillStyle=`rgba(80,200,255,${0.2+Math.random()*0.3})`;
+    X.fillRect(px,py,sz,sz);
+  }
+  X.restore();
+}
+
+function drawScanTarget(cx,cy){
+  if(!scanActive)return;
+  const tx=cx+250,ty=cy;
+  const s=60+Math.sin(t*2)*5;
+
+  X.strokeStyle=`rgba(80,160,255,${0.3+scanProg*0.4})`;X.lineWidth=1.5;
+  const corners=[[tx-s,ty-s],[tx+s,ty-s],[tx+s,ty+s],[tx-s,ty+s]];
+  const g=s*0.3;
+  corners.forEach(([x,y],i)=>{
+    const dx=i%2===0?1:-1,dy=i<2?1:-1;
+    X.beginPath();X.moveTo(x,y+dy*g);X.lineTo(x,y);X.lineTo(x+dx*g,y);X.stroke();
+  });
+
+  X.save();
+  X.shadowColor='rgba(80,160,255,0.5)';X.shadowBlur=10;
+  X.strokeStyle=`rgba(80,160,255,${0.15+Math.sin(t*4)*0.05})`;
+  X.lineWidth=0.5;
+  for(let i=0;i<8;i++){
+    const a=t+i*Math.PI/4;
+    const r=s*0.8;
+    X.beginPath();X.arc(tx,ty,r,a,a+0.3);X.stroke();
+  }
+  X.restore();
+
+  if(scanProg>0.3){
+    X.font='9px monospace';X.textAlign='left';
+    X.fillStyle=`rgba(80,200,255,${Math.min(1,(scanProg-0.3)*3)})`;
+    X.fillText('ANOMALY DETECTED',tx+s+15,ty-30);
+    X.fillText('CLASS: UNKNOWN',tx+s+15,ty-16);
+  }
+  if(scanProg>0.6){
+    X.fillStyle=`rgba(80,200,255,${Math.min(1,(scanProg-0.6)*3)})`;
+    X.fillText('ENERGY: 847 TERAWATTS',tx+s+15,ty-2);
+    X.fillText('ORIGIN: GOLDEN AGE',tx+s+15,ty+12);
+  }
+  if(scanProg>0.9){
+    X.fillStyle='rgba(100,255,150,0.8)';
+    X.fillText('SCAN COMPLETE',tx+s+15,ty+30);
+  }
+}
+
+function drawScanProgress(){
+  if(!scanActive)return;
+  const bw=160,bh=3;
+  X.fillStyle='rgba(80,160,255,0.2)';
+  X.fillRect(W/2-bw/2,H*0.75,bw,bh);
+  X.fillStyle='rgba(80,160,255,0.7)';
+  X.fillRect(W/2-bw/2,H*0.75,bw*scanProg,bh);
+  X.font='9px monospace';X.textAlign='center';
+  X.fillStyle='rgba(80,200,255,0.5)';
+  X.fillText(`SCANNING ${(scanProg*100)|0}%`,W/2,H*0.75+16);
+}
+
+function drawSuperBar(){
+  const bx=30,by=H-60,bw=200,bh=6;
+  const superVal=0.5+Math.sin(t*0.2)*0.5;
+  X.fillStyle='rgba(40,40,40,0.4)';
+  X.fillRect(bx,by,bw,bh);
+  const g=X.createLinearGradient(bx,0,bx+bw*superVal,0);
+  g.addColorStop(0,'rgba(255,200,0,0.8)');g.addColorStop(1,'rgba(255,140,0,0.6)');
+  X.fillStyle=g;
+  X.fillRect(bx,by,bw*superVal,bh);
+  X.font='9px monospace';X.textAlign='left';
+  X.fillStyle='rgba(255,200,0,0.4)';
+  X.fillText('SUPER',bx,by-6);
+}
+
+function drawHUD(){
+  X.font='10px monospace';
+  X.fillStyle='rgba(200,220,240,0.3)';
+  X.textAlign='left';X.fillText('GUARDIAN',20,25);
+  X.textAlign='right';X.fillText('LIGHT: 1580',W-20,25);
+}
+
+function drawScanlines(){
+  for(let y=0;y<H;y+=3){X.fillStyle='rgba(0,0,0,0.05)';X.fillRect(0,y,W,1)}
+}
+
+function simulate(){
+  scanCycle=(t%8);
+  if(scanCycle<1){scanActive=false;scanProg=0}
+  else if(scanCycle<6){scanActive=true;scanProg=Math.min(1,(scanCycle-1)/5)}
+  else{scanActive=scanProg>=1;scanProg=1}
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;simulate();
+  X.fillStyle='#050508';X.fillRect(0,0,W,H);
+  drawGhost(W*0.3,H*0.45,30);
+  drawScanBeam(W*0.3,H*0.45);
+  drawScanTarget(W*0.3,H*0.45);
+  drawScanProgress();
+  drawSuperBar();
+  drawHUD();
+  drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>

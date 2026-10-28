@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cyberpunk 2077 Quickhack UI</title>
+<style>*{margin:0;padding:0}body{background:#000;overflow:hidden}canvas{display:block}</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const C=document.getElementById('c'),X=C.getContext('2d');
+let W,H;
+function resize(){W=C.width=innerWidth;H=C.height=innerHeight}
+resize();addEventListener('resize',resize);
+
+let t=0,selectedHack=0,uploadProg=0,uploading=false,uploadCycle=0;
+
+const hacks=[
+  {name:'PING',ram:1,desc:'REVEAL CONNECTED DEVICES',color:'#00cccc'},
+  {name:'SHORT CIRCUIT',ram:3,desc:'DEAL ELECTRICAL DAMAGE',color:'#ffcc00'},
+  {name:'SYSTEM RESET',ram:6,desc:'FORCE REBOOT TARGET',color:'#ff4444'},
+  {name:'CONTAGION',ram:4,desc:'POISON — SPREADS TO NEARBY',color:'#44ff44'},
+  {name:'CRIPPLE MOVEMENT',ram:2,desc:'DISABLE LOCOMOTION',color:'#cc88ff'},
+  {name:'OVERHEAT',ram:5,desc:'BURN DAMAGE OVER TIME',color:'#ff8800'},
+];
+
+const ramMax=12;let ramUsed=0;
+
+function drawMatrix(x,y,w,h){
+  X.fillStyle='rgba(5,10,15,0.9)';
+  X.fillRect(x,y,w,h);
+  X.strokeStyle='rgba(0,200,200,0.15)';X.lineWidth=0.5;
+  X.strokeRect(x,y,w,h);
+
+  X.font='11px monospace';X.textAlign='center';X.textBaseline='middle';
+  const cols=6,rows=6,cw=w/cols,ch=h/rows;
+  const chars='1C E9 55 BD FF 7A 1C 55 E9 BD 7A FF 55 1C BD E9 FF 7A BD 55 1C E9 7A FF 55 BD E9 1C 7A FF BD 55 E9 1C FF 7A'.split(' ');
+
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const i=r*cols+c;
+      const cx=x+c*cw+cw/2,cy=y+r*ch+ch/2;
+      const highlight=(r===Math.floor(t*0.5)%rows&&c===Math.floor(t*0.7)%cols);
+      X.fillStyle=highlight?'rgba(0,255,255,0.9)':`rgba(0,200,200,${0.3+Math.sin(t+i)*0.1})`;
+      X.fillText(chars[i%chars.length],cx,cy);
+      if(highlight){
+        X.strokeStyle='rgba(0,255,255,0.4)';X.lineWidth=1;
+        X.strokeRect(x+c*cw+2,y+r*ch+2,cw-4,ch-4);
+      }
+    }
+  }
+}
+
+function drawHackList(x,y,w){
+  hacks.forEach((h,i)=>{
+    const hy=y+i*34;
+    const sel=i===selectedHack;
+    const hover=sel?0.9:0.3;
+
+    X.fillStyle=sel?'rgba(0,40,40,0.8)':'rgba(5,10,15,0.5)';
+    X.fillRect(x,hy,w,30);
+
+    if(sel){
+      X.strokeStyle='rgba(0,200,200,0.5)';X.lineWidth=1;
+      X.strokeRect(x,hy,w,30);
+      X.fillStyle='rgba(0,200,200,0.05)';
+      X.fillRect(x,hy,w,30);
+    }
+
+    X.font='bold 11px monospace';X.textAlign='left';
+    X.fillStyle=`rgba(0,200,200,${hover})`;
+    X.fillText(h.name,x+10,hy+13);
+
+    X.font='9px monospace';
+    X.fillStyle=`rgba(200,200,200,${hover*0.5})`;
+    X.fillText(h.desc,x+10,hy+25);
+
+    X.textAlign='right';
+    X.font='10px monospace';
+    X.fillStyle=h.ram<=ramMax-ramUsed?`rgba(0,200,200,${hover})`:`rgba(255,60,60,${hover})`;
+    X.fillText(`${h.ram} RAM`,x+w-10,hy+18);
+  });
+}
+
+function drawRAMBar(x,y,w){
+  X.font='9px monospace';X.textAlign='left';
+  X.fillStyle='rgba(0,200,200,0.5)';
+  X.fillText(`CYBERDECK RAM: ${ramMax-ramUsed}/${ramMax}`,x,y-6);
+
+  for(let i=0;i<ramMax;i++){
+    const bx=x+i*(w/ramMax),bw=w/ramMax-2;
+    X.fillStyle=i<ramMax-ramUsed?'rgba(0,200,200,0.6)':'rgba(40,40,40,0.4)';
+    X.fillRect(bx,y,bw,8);
+    if(i<ramMax-ramUsed){
+      X.save();X.shadowColor='rgba(0,200,200,0.4)';X.shadowBlur=4;
+      X.fillStyle='rgba(0,200,200,0.3)';X.fillRect(bx,y,bw,8);
+      X.restore();
+    }
+  }
+}
+
+function drawUploadBar(x,y,w){
+  if(!uploading)return;
+  X.fillStyle='rgba(5,10,15,0.8)';X.fillRect(x,y,w,24);
+  X.strokeStyle='rgba(0,200,200,0.3)';X.strokeRect(x,y,w,24);
+
+  X.fillStyle='rgba(0,200,200,0.15)';X.fillRect(x+2,y+2,w*uploadProg-4,20);
+  X.save();X.shadowColor='rgba(0,200,200,0.5)';X.shadowBlur=8;
+  X.fillStyle='rgba(0,200,200,0.4)';X.fillRect(x+2,y+2,w*uploadProg-4,20);
+  X.restore();
+
+  X.font='10px monospace';X.textAlign='center';
+  X.fillStyle='rgba(0,255,255,0.8)';
+  X.fillText(`UPLOADING ${hacks[selectedHack].name} — ${(uploadProg*100)|0}%`,x+w/2,y+14);
+}
+
+function drawTargetInfo(x,y){
+  X.strokeStyle='rgba(0,200,200,0.2)';X.lineWidth=0.5;
+  X.strokeRect(x,y,200,80);
+  X.font='10px monospace';X.textAlign='left';
+  X.fillStyle='rgba(0,200,200,0.5)';
+  X.fillText('TARGET: ARASAKA DRONE',x+8,y+16);
+  X.fillStyle='rgba(200,200,200,0.3)';
+  X.fillText('MODEL: T-480 SENTINEL',x+8,y+32);
+  X.fillText('RESISTANCE: LOW',x+8,y+46);
+  X.fillText('ICE: STANDARD',x+8,y+60);
+  X.fillText('STATUS: VULNERABLE',x+8,y+74);
+}
+
+function drawGlitch(){
+  if(Math.random()<0.02){
+    const gy=Math.random()*H;
+    const gh=2+Math.random()*4;
+    X.save();
+    X.drawImage(C,0,gy,W,gh,Math.random()*10-5,gy+Math.random()*4-2,W,gh);
+    X.restore();
+  }
+}
+
+function drawScanlines(){
+  for(let y=0;y<H;y+=2){X.fillStyle='rgba(0,0,0,0.08)';X.fillRect(0,y,W,1)}
+  X.fillStyle=`rgba(0,20,20,${0.02+Math.sin(t*0.5)*0.01})`;X.fillRect(0,0,W,H);
+}
+
+function simulate(){
+  uploadCycle+=0.016;
+  if(uploadCycle>6){
+    selectedHack=(selectedHack+1)%hacks.length;
+    uploadCycle=0;uploading=false;uploadProg=0;
+    ramUsed=0;
+  }else if(uploadCycle>1.5&&!uploading){
+    uploading=true;uploadProg=0;
+  }
+  if(uploading){
+    uploadProg=Math.min(1,(uploadCycle-1.5)/3);
+    if(uploadProg>=1){ramUsed=hacks[selectedHack].ram}
+  }
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  t+=0.016;simulate();
+  X.fillStyle='#030608';X.fillRect(0,0,W,H);
+
+  const mx=W*0.05,my=H*0.1;
+  drawMatrix(mx,my,W*0.35,H*0.55);
+  drawHackList(W*0.45,my,W*0.35);
+  drawRAMBar(mx,H*0.75,W*0.35);
+  drawUploadBar(W*0.45,H*0.75,W*0.35);
+  drawTargetInfo(W*0.82,my);
+  drawGlitch();
+  drawScanlines();
+}
+frame();
+</script>
+</body>
+</html>
