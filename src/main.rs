@@ -1,13 +1,16 @@
 mod renderer;
 mod hud;
+mod huds;
 
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
 use winit::event::WindowEvent;
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::window::{Window, WindowId, WindowAttributes};
+use winit::event::ElementState;
+use winit::keyboard::{Key, NamedKey};
 use renderer::Renderer;
-use hud::TacticalHud;
+use hud::{TacticalHud, HudMode};
 
 struct App {
     window: Option<Arc<Window>>,
@@ -45,6 +48,15 @@ impl ApplicationHandler for App {
             WindowEvent::Resized(size) => {
                 if let Some(r) = self.renderer.as_mut() {
                     r.resize(size.width, size.height);
+                }
+            }
+            WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
+                match event.logical_key.as_ref() {
+                    Key::Character("1") => self.hud.mode = HudMode::Radar,
+                    Key::Character("2") => self.hud.mode = HudMode::F35Hmds,
+                    Key::Character("3") => self.hud.mode = HudMode::Sonar,
+                    Key::Named(NamedKey::Escape) => event_loop.exit(),
+                    _ => {}
                 }
             }
             WindowEvent::RedrawRequested => {
