@@ -1,9 +1,11 @@
 use crate::renderer::Vertex;
+use crate::protocol::{TacticalContact, ThreatClass};
 use crate::huds::f35_hmds::{F35HmdsState, build_f35_hmds};
 use crate::huds::sonar_waterfall::{SonarState, build_sonar};
 use crate::huds::apache_tads::{TadsState, build_tads};
 use crate::huds::aegis_spy1::{AegisState, build_aegis};
 use crate::huds::reaper_gcs::{ReaperState, build_reaper};
+use crate::huds::intel_globe::{GlobeState, build_intel_globe};
 
 pub struct Contact {
     pub x: f32,
@@ -39,6 +41,7 @@ pub enum HudMode {
     Apache,
     Aegis,
     Reaper,
+    IntelGlobe,
 }
 
 pub struct TacticalHud {
@@ -50,6 +53,7 @@ pub struct TacticalHud {
     pub apache: TadsState,
     pub aegis: AegisState,
     pub reaper: ReaperState,
+    pub globe: GlobeState,
 }
 
 impl TacticalHud {
@@ -71,6 +75,27 @@ impl TacticalHud {
             apache: TadsState::demo(),
             aegis: AegisState::demo(),
             reaper: ReaperState::demo(),
+            globe: GlobeState::demo(),
+        }
+    }
+
+    pub fn ingest_feed(&mut self, feed: &[TacticalContact]) {
+        if feed.is_empty() { return; }
+        self.contacts.clear();
+        for tc in feed {
+            let threat = match tc.threat {
+                ThreatClass::Hostile  => ThreatLevel::Hostile,
+                ThreatClass::Friendly => ThreatLevel::Friendly,
+                ThreatClass::Neutral  => ThreatLevel::Neutral,
+                ThreatClass::Unknown  => ThreatLevel::Unknown,
+            };
+            self.contacts.push(Contact {
+                x: (tc.lon as f32) / 180.0,
+                y: (tc.lat as f32) / 90.0,
+                threat,
+                label: tc.label.clone(),
+                signal: -(tc.speed_kts.max(1.0).log2() * 10.0),
+            });
         }
     }
 
@@ -86,6 +111,8 @@ impl TacticalHud {
         self.apache.tick(self.time);
         self.aegis.tick(self.time);
         self.reaper.tick(self.time);
+        self.globe.tick(self.time);
+        self.globe.ingest(&self.contacts);
     }
 
     pub fn build_vertices(&self, w: f32, h: f32, time: f32) -> Vec<Vertex> {
@@ -108,6 +135,9 @@ impl TacticalHud {
             }
             HudMode::Reaper => {
                 build_reaper(&mut verts, &self.reaper, w, h, time);
+            }
+            HudMode::IntelGlobe => {
+                build_intel_globe(&mut verts, &self.globe, w, h, time);
             }
         }
         build_scanlines(&mut verts, w, h, time);
