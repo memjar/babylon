@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Holotable — Tactical Display</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
+canvas{display:block}
+#overlay{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:10}
+#scanline{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:11;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,180,255,0.03) 2px,rgba(0,180,255,0.03) 4px)}
+#hud{position:fixed;bottom:20px;left:20px;color:rgba(0,180,255,0.7);font-size:11px;z-index:12;letter-spacing:1px;text-transform:uppercase}
+#hud div{margin:4px 0}
+#corner-tl,#corner-tr,#corner-bl,#corner-br{position:fixed;width:40px;height:40px;z-index:12}
+#corner-tl{top:15px;left:15px;border-top:1px solid rgba(0,180,255,0.4);border-left:1px solid rgba(0,180,255,0.4)}
+#corner-tr{top:15px;right:15px;border-top:1px solid rgba(0,180,255,0.4);border-right:1px solid rgba(0,180,255,0.4)}
+#corner-bl{bottom:15px;left:15px;border-bottom:1px solid rgba(0,180,255,0.4);border-left:1px solid rgba(0,180,255,0.4)}
+#corner-br{bottom:15px;right:15px;border-bottom:1px solid rgba(0,180,255,0.4);border-right:1px solid rgba(0,180,255,0.4)}
+</style>
+</head>
+<body>
+<div id="scanline"></div>
+<div id="corner-tl"></div><div id="corner-tr"></div><div id="corner-bl"></div><div id="corner-br"></div>
+<div id="hud">
+  <div>TACTICAL HOLODISPLAY v2.1</div>
+  <div id="hud-coord">SECTOR 7-G // LAT 0.000 LON 0.000</div>
+  <div id="hud-status">STATUS: ACTIVE // CONTACTS: 0</div>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000508, 0.015);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(0, 12, 18);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.prepend(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxPolarAngle = Math.PI/2.2;
+controls.minDistance = 8;
+controls.maxDistance = 35;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.4;
+
+const holoMat = new THREE.ShaderMaterial({
+  transparent: true,
+  wireframe: true,
+  depthWrite: false,
+  uniforms: {
+    uTime: {value:0},
+    uColor: {value: new THREE.Color(0x00b4ff)},
+    uScanY: {value:0},
+    uFlicker: {value:1},
+  },
+  vertexShader:`
+    varying vec3 vPos;
+    varying float vY;
+    void main(){
+      vPos = position;
+      vY = position.y;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+    }
+  `,
+  fragmentShader:`
+    uniform float uTime;
+    uniform vec3 uColor;
+    uniform float uScanY;
+    uniform float uFlicker;
+    varying vec3 vPos;
+    varying float vY;
+    void main(){
+      float scanDist = abs(vY - uScanY);
+      float scanGlow = smoothstep(2.0, 0.0, scanDist) * 0.6;
+      float heightFade = smoothstep(-1.0, 4.0, vY) * 0.7 + 0.3;
+      float edgePulse = sin(vPos.x*3.0 + vPos.z*3.0 + uTime*2.0)*0.1 + 0.9;
+      float noise = fract(sin(dot(vPos.xz, vec2(12.9898,78.233)) + uTime) * 43758.5453) * 0.08;
+      float alpha = (0.35 + scanGlow + noise) * heightFade * edgePulse * uFlicker;
+      vec3 col = uColor + vec3(scanGlow * 0.3, scanGlow * 0.1, 0.0);
+      gl_FragColor = vec4(col, alpha);
+    }
+  `
+});
+
+const gridMat = new THREE.ShaderMaterial({
+  transparent: true,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+  uniforms: {
+    uTime: {value:0},
+    uColor: {value: new THREE.Color(0x004488)},
+  },
+  vertexShader:`
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0);
+    }
+  `,
+  fragmentShader:`
+    uniform float uTime;
+    uniform vec3 uColor;
+    varying vec2 vUv;
+    void main(){
+      vec2 grid = abs(fract(vUv * 20.0 - 0.5) - 0.5) / fwidth(vUv * 20.0);
+      float line = min(grid.x, grid.y);
+      float g = 1.0 - min(line, 1.0);
+      float radial = 1.0 - smoothstep(0.3, 0.5, length(vUv - 0.5));
+      gl_FragColor = vec4(uColor, g * 0.15 * radial);
+    }
+  `
+});
+
+function generateTerrain(){
+  const size = 24, seg = 80;
+  const geo = new THREE.PlaneGeometry(size, size, seg, seg);
+  geo.rotateX(-Math.PI/2);
+  const pos = geo.attributes.position;
+  for(let i=0; i<pos.count; i++){
+    const x = pos.getX(i), z = pos.getZ(i);
+    let h = 0;
+    h += Math.sin(x*0.3)*Math.cos(z*0.4)*2.0;
+    h += Math.sin(x*0.7+1.0)*Math.cos(z*0.5+2.0)*1.2;
+    h += Math.sin(x*1.5+3.0)*Math.sin(z*1.2+1.5)*0.4;
+    const ridge = Math.max(0, 2.5 - Math.abs(x*0.8 + z*0.3 - 2.0)) * 1.5;
+    h += ridge;
+    const dist = Math.sqrt(x*x + z*z);
+    h *= smoothstep(12, 8, dist);
+    pos.setY(i, h);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function smoothstep(edge0, edge1, x){
+  const t = Math.max(0, Math.min(1, (x-edge0)/(edge1-edge0)));
+  return t*t*(3-2*t);
+}
+
+const terrainGeo = generateTerrain();
+const terrain = new THREE.Mesh(terrainGeo, holoMat);
+scene.add(terrain);
+
+const baseGeo = new THREE.PlaneGeometry(30, 30);
+baseGeo.rotateX(-Math.PI/2);
+const base = new THREE.Mesh(baseGeo, gridMat);
+base.position.y = -0.5;
+scene.add(base);
+
+const ringGeo = new THREE.RingGeometry(11.5, 12, 64);
+ringGeo.rotateX(-Math.PI/2);
+const ringMat = new THREE.MeshBasicMaterial({color:0x00b4ff, transparent:true, opacity:0.2, side:THREE.DoubleSide});
+const ring = new THREE.Mesh(ringGeo, ringMat);
+ring.position.y = -0.4;
+scene.add(ring);
+
+const ring2Geo = new THREE.RingGeometry(11.8, 12.0, 64);
+ring2Geo.rotateX(-Math.PI/2);
+const ring2Mat = new THREE.MeshBasicMaterial({color:0x00d4ff, transparent:true, opacity:0.4, side:THREE.DoubleSide});
+const ring2 = new THREE.Mesh(ring2Geo, ring2Mat);
+ring2.position.y = -0.4;
+scene.add(ring2);
+
+for(let i=0; i<4; i++){
+  const angle = (i/4)*Math.PI*2;
+  const tickGeo = new THREE.PlaneGeometry(0.1, 1.5);
+  tickGeo.rotateX(-Math.PI/2);
+  const tick = new THREE.Mesh(tickGeo, new THREE.MeshBasicMaterial({color:0x00b4ff,transparent:true,opacity:0.5,side:THREE.DoubleSide}));
+  tick.position.set(Math.cos(angle)*11.9, -0.39, Math.sin(angle)*11.9);
+  tick.rotation.y = -angle;
+  scene.add(tick);
+}
+
+const sweepGeo = new THREE.CircleGeometry(12, 64, 0, Math.PI/6);
+sweepGeo.rotateX(-Math.PI/2);
+const sweepMat = new THREE.ShaderMaterial({
+  transparent:true, depthWrite:false, side:THREE.DoubleSide,
+  uniforms:{uColor:{value:new THREE.Color(0x00ffcc)}},
+  vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`uniform vec3 uColor;varying vec2 vUv;void main(){float a=smoothstep(0.0,1.0,vUv.x)*0.15*(1.0-vUv.y*0.5);gl_FragColor=vec4(uColor,a);}`
+});
+const sweep = new THREE.Mesh(sweepGeo, sweepMat);
+sweep.position.y = -0.35;
+scene.add(sweep);
+
+const particleCount = 300;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(particleCount*3);
+const pAlpha = new Float32Array(particleCount);
+for(let i=0; i<particleCount; i++){
+  const angle = Math.random()*Math.PI*2;
+  const r = Math.random()*12;
+  pPos[i*3] = Math.cos(angle)*r;
+  pPos[i*3+1] = Math.random()*6 - 0.5;
+  pPos[i*3+2] = Math.sin(angle)*r;
+  pAlpha[i] = Math.random();
+}
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos,3));
+pGeo.setAttribute('alpha', new THREE.BufferAttribute(pAlpha,1));
+const pMat = new THREE.ShaderMaterial({
+  transparent:true, depthWrite:false,
+  uniforms:{uTime:{value:0}},
+  vertexShader:`
+    attribute float alpha;
+    varying float vAlpha;
+    uniform float uTime;
+    void main(){
+      vAlpha = alpha;
+      vec3 p = position;
+      p.y += sin(uTime*0.5 + alpha*10.0)*0.3;
+      vec4 mv = modelViewMatrix * vec4(p,1.0);
+      gl_PointSize = (2.0 + alpha*2.0) * (300.0 / -mv.z);
+      gl_Position = projectionMatrix * mv;
+    }
+  `,
+  fragmentShader:`
+    varying float vAlpha;
+    void main(){
+      float d = length(gl_PointCoord - 0.5)*2.0;
+      if(d > 1.0) discard;
+      float a = (1.0 - d) * vAlpha * 0.3;
+      gl_FragColor = vec4(0.0, 0.7, 1.0, a);
+    }
+  `
+});
+const particles = new THREE.Points(pGeo, pMat);
+scene.add(particles);
+
+function addContact(x, z, type){
+  const group = new THREE.Group();
+  const h = terrainHeight(x, z);
+  group.position.set(x, h + 0.5, z);
+
+  if(type === 'friendly'){
+    const geo = new THREE.ConeGeometry(0.2, 0.5, 4);
+    const mat = new THREE.MeshBasicMaterial({color:0x00ff88, transparent:true, opacity:0.8, wireframe:true});
+    const mesh = new THREE.Mesh(geo, mat);
+    group.add(mesh);
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, h+0.5),
+      new THREE.MeshBasicMaterial({color:0x00ff88, transparent:true, opacity:0.2})
+    );
+    pillar.position.y = -(h+0.5)/2;
+    group.add(pillar);
+  } else {
+    const geo = new THREE.OctahedronGeometry(0.25);
+    const mat = new THREE.MeshBasicMaterial({color:0xff3333, transparent:true, opacity:0.8, wireframe:true});
+    const mesh = new THREE.Mesh(geo, mat);
+    group.add(mesh);
+    const pillar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, h+0.5),
+      new THREE.MeshBasicMaterial({color:0xff3333, transparent:true, opacity:0.2})
+    );
+    pillar.position.y = -(h+0.5)/2;
+    group.add(pillar);
+  }
+  group.userData = {type, baseY: h+0.5, time: Math.random()*100};
+  scene.add(group);
+  return group;
+}
+
+function terrainHeight(x, z){
+  let h = 0;
+  h += Math.sin(x*0.3)*Math.cos(z*0.4)*2.0;
+  h += Math.sin(x*0.7+1.0)*Math.cos(z*0.5+2.0)*1.2;
+  h += Math.sin(x*1.5+3.0)*Math.sin(z*1.2+1.5)*0.4;
+  const ridge = Math.max(0, 2.5 - Math.abs(x*0.8 + z*0.3 - 2.0)) * 1.5;
+  h += ridge;
+  const dist = Math.sqrt(x*x + z*z);
+  h *= smoothstep(12, 8, dist);
+  return h;
+}
+
+const contacts = [];
+contacts.push(addContact(3, 2, 'friendly'));
+contacts.push(addContact(-4, 5, 'friendly'));
+contacts.push(addContact(6, -3, 'friendly'));
+contacts.push(addContact(-2, -4, 'hostile'));
+contacts.push(addContact(5, 6, 'hostile'));
+contacts.push(addContact(-7, 1, 'hostile'));
+contacts.push(addContact(1, -7, 'friendly'));
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 1.5, 0.6, 0.1);
+composer.addPass(bloom);
+
+const holoShader = {
+  uniforms:{tDiffuse:{value:null}, uTime:{value:0}},
+  vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`
+    uniform sampler2D tDiffuse;
+    uniform float uTime;
+    varying vec2 vUv;
+    void main(){
+      vec2 uv = vUv;
+      uv.x += sin(uv.y*200.0+uTime*3.0)*0.0003;
+      vec4 col = texture2D(tDiffuse, uv);
+      float scanline = sin(vUv.y * 400.0 + uTime * 2.0) * 0.04;
+      col.rgb += scanline;
+      float vignette = 1.0 - smoothstep(0.4, 0.9, length(vUv - 0.5));
+      col.rgb *= 0.85 + vignette * 0.15;
+      float flicker = 0.97 + sin(uTime*15.7)*0.01 + sin(uTime*23.3)*0.01;
+      col.rgb *= flicker;
+      col.rgb += vec3(0.0, 0.01, 0.02);
+      gl_FragColor = col;
+    }
+  `
+};
+composer.addPass(new ShaderPass(holoShader));
+
+const clock = new THREE.Clock();
+let scanY = -2;
+const friendlyCount = contacts.filter(c=>c.userData.type==='friendly').length;
+const hostileCount = contacts.filter(c=>c.userData.type==='hostile').length;
+
+function animate(){
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  const dt = clock.getDelta();
+
+  holoMat.uniforms.uTime.value = t;
+  holoMat.uniforms.uScanY.value = scanY;
+  holoMat.uniforms.uFlicker.value = 0.92 + Math.sin(t*11.0)*0.04 + Math.sin(t*17.3)*0.04;
+  gridMat.uniforms.uTime.value = t;
+  pMat.uniforms.uTime.value = t;
+  composer.passes[2].uniforms.uTime.value = t;
+
+  scanY = Math.sin(t*0.4)*4.0;
+  sweep.rotation.y = t*0.5;
+
+  contacts.forEach(c => {
+    c.children[0].rotation.y = t*2.0 + c.userData.time;
+    c.position.y = c.userData.baseY + Math.sin(t*1.5 + c.userData.time)*0.15;
+  });
+
+  const lat = (Math.sin(t*0.1)*40).toFixed(3);
+  const lon = (Math.cos(t*0.07)*80).toFixed(3);
+  document.getElementById('hud-coord').textContent = `SECTOR 7-G // LAT ${lat} LON ${lon}`;
+  document.getElementById('hud-status').textContent = `STATUS: ACTIVE // FRIENDLY: ${friendlyCount} // HOSTILE: ${hostileCount}`;
+
+  controls.update();
+  composer.render();
+}
+animate();
+
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+</script>
+</body>
+</html>
