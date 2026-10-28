@@ -1,6 +1,9 @@
 use crate::renderer::Vertex;
 use crate::huds::f35_hmds::{F35HmdsState, build_f35_hmds};
 use crate::huds::sonar_waterfall::{SonarState, build_sonar};
+use crate::huds::apache_tads::{TadsState, build_tads};
+use crate::huds::aegis_spy1::{AegisState, build_aegis};
+use crate::huds::reaper_gcs::{ReaperState, build_reaper};
 
 pub struct Contact {
     pub x: f32,
@@ -33,6 +36,9 @@ pub enum HudMode {
     Radar,
     F35Hmds,
     Sonar,
+    Apache,
+    Aegis,
+    Reaper,
 }
 
 pub struct TacticalHud {
@@ -41,6 +47,9 @@ pub struct TacticalHud {
     pub time: f32,
     pub f35: F35HmdsState,
     pub sonar: SonarState,
+    pub apache: TadsState,
+    pub aegis: AegisState,
+    pub reaper: ReaperState,
 }
 
 impl TacticalHud {
@@ -59,6 +68,9 @@ impl TacticalHud {
             time: 0.0,
             f35: F35HmdsState::demo(),
             sonar: SonarState::demo(),
+            apache: TadsState::demo(),
+            aegis: AegisState::demo(),
+            reaper: ReaperState::demo(),
         }
     }
 
@@ -71,6 +83,9 @@ impl TacticalHud {
         }
         self.f35.tick(self.time);
         self.sonar.tick(self.time);
+        self.apache.tick(self.time);
+        self.aegis.tick(self.time);
+        self.reaper.tick(self.time);
     }
 
     pub fn build_vertices(&self, w: f32, h: f32, time: f32) -> Vec<Vertex> {
@@ -84,6 +99,15 @@ impl TacticalHud {
             }
             HudMode::Sonar => {
                 build_sonar(&mut verts, &self.sonar, w, h, time);
+            }
+            HudMode::Apache => {
+                build_tads(&mut verts, &self.apache, w, h, time);
+            }
+            HudMode::Aegis => {
+                build_aegis(&mut verts, &self.aegis, w, h, time);
+            }
+            HudMode::Reaper => {
+                build_reaper(&mut verts, &self.reaper, w, h, time);
             }
         }
         build_scanlines(&mut verts, w, h, time);

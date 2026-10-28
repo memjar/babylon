@@ -55,6 +55,9 @@ impl ApplicationHandler for App {
                     Key::Character("1") => self.hud.mode = HudMode::Radar,
                     Key::Character("2") => self.hud.mode = HudMode::F35Hmds,
                     Key::Character("3") => self.hud.mode = HudMode::Sonar,
+                    Key::Character("4") => self.hud.mode = HudMode::Apache,
+                    Key::Character("5") => self.hud.mode = HudMode::Aegis,
+                    Key::Character("6") => self.hud.mode = HudMode::Reaper,
                     Key::Named(NamedKey::Escape) => event_loop.exit(),
                     _ => {}
                 }
