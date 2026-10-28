@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Holotable — Live WiFi Feed</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;overflow:hidden;font-family:'Courier New',monospace}
+canvas{display:block}
+#scanline{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:11;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,180,255,0.03) 2px,rgba(0,180,255,0.03) 4px)}
+#panel{position:fixed;right:15px;top:15px;width:260px;background:rgba(0,10,20,0.85);border:1px solid rgba(0,180,255,0.2);
+  padding:12px;z-index:20;color:rgba(0,180,255,0.7);font-size:10px;max-height:90vh;overflow-y:auto}
+#panel h3{font-size:11px;letter-spacing:2px;margin-bottom:8px;color:rgba(0,180,255,0.5)}
+.device{padding:6px 0;border-bottom:1px solid rgba(0,180,255,0.08)}
+.device .name{color:rgba(0,200,255,0.8);font-weight:bold}
+.device .meta{color:rgba(0,180,255,0.4);font-size:9px;margin-top:2px}
+.threat-hostile .name{color:rgba(255,80,80,0.9)}
+.threat-iot .name{color:rgba(255,200,60,0.8)}
+.threat-friendly .name{color:rgba(0,255,120,0.8)}
+#status{position:fixed;bottom:15px;left:15px;color:rgba(0,180,255,0.5);font:10px monospace;z-index:20}
+</style>
+</head>
+<body>
+<div id="scanline"></div>
+<div id="panel"><h3>DEVICE ROSTER</h3><div id="roster"></div></div>
+<div id="status">FEED: INITIALIZING</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {ShaderPass} from 'three/addons/postprocessing/ShaderPass.js';
+import {BabylonCore, mockWifiFeed, vendorClassifier, signalClassifier} from './babylon-core.js';
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x000508, 0.015);
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(0, 12, 18);
+const renderer = new THREE.WebGLRenderer({antialias:true, alpha:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.2;
+document.body.prepend(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping=true;controls.dampingFactor=0.05;controls.maxPolarAngle=Math.PI/2.2;
+controls.minDistance=8;controls.maxDistance=35;controls.autoRotate=true;controls.autoRotateSpeed=0.4;
+
+const holoMat = new THREE.ShaderMaterial({
+  transparent:true,wireframe:true,depthWrite:false,
+  uniforms:{uTime:{value:0},uColor:{value:new THREE.Color(0x00b4ff)},uScanY:{value:0},uFlicker:{value:1}},
+  vertexShader:`varying vec3 vPos;varying float vY;void main(){vPos=position;vY=position.y;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`uniform float uTime;uniform vec3 uColor;uniform float uScanY;uniform float uFlicker;varying vec3 vPos;varying float vY;
+    void main(){float sd=abs(vY-uScanY);float sg=smoothstep(2.0,0.0,sd)*0.6;float hf=smoothstep(-1.0,4.0,vY)*0.7+0.3;
+    float ep=sin(vPos.x*3.0+vPos.z*3.0+uTime*2.0)*0.1+0.9;float n=fract(sin(dot(vPos.xz,vec2(12.9898,78.233))+uTime)*43758.5453)*0.08;
+    float a=(0.35+sg+n)*hf*ep*uFlicker;vec3 c=uColor+vec3(sg*0.3,sg*0.1,0.0);gl_FragColor=vec4(c,a);}`
+});
+
+function smoothstep(e0,e1,x){const t=Math.max(0,Math.min(1,(x-e0)/(e1-e0)));return t*t*(3-2*t)}
+function terrainH(x,z){let h=0;h+=Math.sin(x*0.3)*Math.cos(z*0.4)*2;h+=Math.sin(x*0.7+1)*Math.cos(z*0.5+2)*1.2;
+  h+=Math.sin(x*1.5+3)*Math.sin(z*1.2+1.5)*0.4;h+=Math.max(0,2.5-Math.abs(x*0.8+z*0.3-2))*1.5;
+  h*=smoothstep(12,8,Math.sqrt(x*x+z*z));return h}
+
+const tGeo=new THREE.PlaneGeometry(24,24,80,80);tGeo.rotateX(-Math.PI/2);
+const pos=tGeo.attributes.position;
+for(let i=0;i<pos.count;i++){const x=pos.getX(i),z=pos.getZ(i);pos.setY(i,terrainH(x,z))}
+tGeo.computeVertexNormals();
+scene.add(new THREE.Mesh(tGeo,holoMat));
+
+const ringMat=new THREE.MeshBasicMaterial({color:0x00d4ff,transparent:true,opacity:0.3,side:THREE.DoubleSide});
+const rGeo=new THREE.RingGeometry(11.8,12,64);rGeo.rotateX(-Math.PI/2);
+const ring=new THREE.Mesh(rGeo,ringMat);ring.position.y=-0.4;scene.add(ring);
+
+const sweepGeo=new THREE.CircleGeometry(12,64,0,Math.PI/6);sweepGeo.rotateX(-Math.PI/2);
+const sweepMat=new THREE.MeshBasicMaterial({color:0x00ffcc,transparent:true,opacity:0.08,side:THREE.DoubleSide});
+const sweep=new THREE.Mesh(sweepGeo,sweepMat);sweep.position.y=-0.35;scene.add(sweep);
+
+const pCount=200;const pGeo=new THREE.BufferGeometry();const pPos=new Float32Array(pCount*3);
+const pAlpha=new Float32Array(pCount);
+for(let i=0;i<pCount;i++){const a=Math.random()*Math.PI*2;const r=Math.random()*12;
+  pPos[i*3]=Math.cos(a)*r;pPos[i*3+1]=Math.random()*6-0.5;pPos[i*3+2]=Math.sin(a)*r;pAlpha[i]=Math.random()}
+pGeo.setAttribute('position',new THREE.BufferAttribute(pPos,3));
+pGeo.setAttribute('alpha',new THREE.BufferAttribute(pAlpha,1));
+const pMat=new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uTime:{value:0}},
+  vertexShader:`attribute float alpha;varying float vAlpha;uniform float uTime;void main(){vAlpha=alpha;vec3 p=position;p.y+=sin(uTime*0.5+alpha*10.0)*0.3;vec4 mv=modelViewMatrix*vec4(p,1.0);gl_PointSize=(2.0+alpha*2.0)*(300.0/-mv.z);gl_Position=projectionMatrix*mv;}`,
+  fragmentShader:`varying float vAlpha;void main(){float d=length(gl_PointCoord-0.5)*2.0;if(d>1.0)discard;gl_FragColor=vec4(0.0,0.7,1.0,(1.0-d)*vAlpha*0.3);}`
+});
+scene.add(new THREE.Points(pGeo,pMat));
+
+const composer=new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene,camera));
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth,innerHeight),1.5,0.6,0.1));
+const holoPost={uniforms:{tDiffuse:{value:null},uTime:{value:0}},
+  vertexShader:`varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader:`uniform sampler2D tDiffuse;uniform float uTime;varying vec2 vUv;void main(){vec2 uv=vUv;uv.x+=sin(uv.y*200.0+uTime*3.0)*0.0003;vec4 col=texture2D(tDiffuse,uv);col.rgb+=sin(vUv.y*400.0+uTime*2.0)*0.04;col.rgb*=0.97+sin(uTime*15.7)*0.01+sin(uTime*23.3)*0.01;gl_FragColor=col;}`
+};
+composer.addPass(new ShaderPass(holoPost));
+
+const markers=new Map();
+
+function getMarkerColor(threat){
+  if(threat==='hostile')return 0xff3333;
+  if(threat==='friendly')return 0x00ff88;
+  if(threat==='iot')return 0xffcc00;
+  return 0x8888ff;
+}
+function getMarkerGeo(threat){
+  if(threat==='hostile')return new THREE.OctahedronGeometry(0.25);
+  if(threat==='friendly')return new THREE.ConeGeometry(0.2,0.5,4);
+  if(threat==='iot')return new THREE.BoxGeometry(0.3,0.3,0.3);
+  return new THREE.SphereGeometry(0.2,8,8);
+}
+
+function updateMarkers(devices){
+  const seen=new Set();
+  devices.forEach(d=>{
+    seen.add(d.mac);
+    const h=terrainH(d.x,d.z);
+    const color=getMarkerColor(d.threat);
+    if(markers.has(d.mac)){
+      const g=markers.get(d.mac);
+      g.targetX=d.x;g.targetZ=d.z;g.targetY=h+0.5;
+      g.children[0].material.color.setHex(color);
+    }else{
+      const g=new THREE.Group();
+      const mesh=new THREE.Mesh(getMarkerGeo(d.threat),new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.8,wireframe:true}));
+      g.add(mesh);
+      const pillar=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,h+0.5),new THREE.MeshBasicMaterial({color,transparent:true,opacity:0.2}));
+      pillar.position.y=-(h+0.5)/2;g.add(pillar);
+      g.position.set(d.x,h+0.5,d.z);
+      g.targetX=d.x;g.targetZ=d.z;g.targetY=h+0.5;
+      g.userData={mac:d.mac,time:Math.random()*100};
+      scene.add(g);markers.set(d.mac,g);
+    }
+  });
+  for(const [mac,g] of markers){
+    if(!seen.has(mac)){scene.remove(g);markers.delete(mac)}
+  }
+}
+
+function updateRoster(devices){
+  const el=document.getElementById('roster');
+  el.innerHTML=devices.map(d=>`<div class="device threat-${d.threat||'unknown'}">
+    <div class="name">${d.name||d.mac}</div>
+    <div class="meta">${d.vendor} · ${d.rssi}dBm · CH${d.channel} · ${d.proximity||'?'}</div>
+  </div>`).join('');
+  document.getElementById('status').textContent=`FEED: ACTIVE · ${devices.length} DEVICES · ${new Date().toLocaleTimeString()}`;
+}
+
+const core=new BabylonCore({pollInterval:2000});
+core.addFeed('wifi', mockWifiFeed);
+core.addClassifier(async devices=>devices.map(vendorClassifier));
+core.addClassifier(async devices=>devices.map(signalClassifier));
+core.register('holotable',{feed:updateMarkers});
+core.onData=updateRoster;
+core.start();
+
+const clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const t=clock.getElapsedTime();
+  holoMat.uniforms.uTime.value=t;
+  holoMat.uniforms.uScanY.value=Math.sin(t*0.4)*4;
+  holoMat.uniforms.uFlicker.value=0.92+Math.sin(t*11)*0.04+Math.sin(t*17.3)*0.04;
+  pMat.uniforms.uTime.value=t;
+  composer.passes[2].uniforms.uTime.value=t;
+  sweep.rotation.y=t*0.5;
+  for(const [,g] of markers){
+    g.position.x+=(g.targetX-g.position.x)*0.05;
+    g.position.z+=(g.targetZ-g.position.z)*0.05;
+    g.position.y=g.targetY+Math.sin(t*1.5+g.userData.time)*0.15;
+    g.children[0].rotation.y=t*2+g.userData.time;
+  }
+  controls.update();composer.render();
+}
+animate();
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)});
+</script>
+</body>
+</html>
