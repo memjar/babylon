@@ -1,6 +1,8 @@
 mod renderer;
 mod hud;
 mod huds;
+mod protocol;
+mod feed;
 
 use std::sync::Arc;
 use winit::application::ApplicationHandler;
@@ -11,19 +13,24 @@ use winit::event::ElementState;
 use winit::keyboard::{Key, NamedKey};
 use renderer::Renderer;
 use hud::{TacticalHud, HudMode};
+use feed::TacticalFeed;
 
 struct App {
     window: Option<Arc<Window>>,
     renderer: Option<Renderer>,
     hud: TacticalHud,
+    feed: Option<TacticalFeed>,
 }
 
 impl App {
     fn new() -> Self {
+        let feed_url = std::env::var("C2_FEED").unwrap_or_else(|_| "ws://127.0.0.1:9100/c2".into());
+        let feed = TacticalFeed::connect(&feed_url);
         Self {
             window: None,
             renderer: None,
             hud: TacticalHud::new(),
+            feed: Some(feed),
         }
     }
 }
@@ -64,6 +71,9 @@ impl ApplicationHandler for App {
             }
             WindowEvent::RedrawRequested => {
                 if let (Some(r), Some(w)) = (self.renderer.as_mut(), self.window.as_ref()) {
+                    if let Some(feed) = &self.feed {
+                        self.hud.ingest_feed(&feed.snapshot());
+                    }
                     self.hud.tick();
                     r.render(&self.hud);
                     w.request_redraw();
